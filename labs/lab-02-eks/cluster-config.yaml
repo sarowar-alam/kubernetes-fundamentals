@@ -140,16 +140,16 @@ managedNodeGroups:
 
     # Minimum number of nodes (Auto Scaling Group lower bound)
     # Even during low traffic, at least 1 node always runs
-    minSize: 1
+    minSize: 2
 
     # Maximum number of nodes (Auto Scaling Group upper bound)
     # During traffic spikes, Kubernetes can scale up to this many nodes
     # Cost control: cap this to avoid surprise bills
-    maxSize: 2
+    maxSize: 3
 
     # Desired number of nodes at cluster creation
     # Can be adjusted later: eksctl scale nodegroup --nodes=X
-    desiredCapacity: 1
+    desiredCapacity: 2
 
     # EBS volume size per node (in GB)
     # Used for container images, container logs, and node OS

@@ -42,8 +42,8 @@ INSTANCE_PROFILE_NAME="${INSTANCE_PROFILE_NAME:-SSM}"             # IAM instance
 NAME_PREFIX="${NAME_PREFIX:-node}"                    # Tags: node-public-1, node-private-1, etc.
 
 # ── Instance counts ───────────────────────────────────────────────────────────
-PUBLIC_COUNT="${PUBLIC_COUNT:-1}"    # Instances in the public subnet  (receive public IPs)
-PRIVATE_COUNT="${PRIVATE_COUNT:-0}"  # Instances in the private subnet (private IPs only)
+PUBLIC_COUNT="${PUBLIC_COUNT:-2}"    # Instances in the public subnet  (receive public IPs)
+PRIVATE_COUNT="${PRIVATE_COUNT:-2}"  # Instances in the private subnet (private IPs only)
 
 # ── Output ────────────────────────────────────────────────────────────────────
 STATE_FILE="${STATE_FILE:-./cluster-state.env}"   # Written after provisioning completes

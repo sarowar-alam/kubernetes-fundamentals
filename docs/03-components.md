@@ -748,30 +748,30 @@ Kubernetes separates *what storage is needed* (PersistentVolumeClaim) from *what
   │ accessMode: ReadWriteOnce │
   │ storage: 20Gi             │
   └──────────────┬────────────┘
-                   │
-                   ▼  kube-controller-manager (PV controller) sees the claim
+                 │
+                 ▼  kube-controller-manager (PV controller) sees the claim
   ┌──────────────┬────────────┐
   │ StorageClass: gp3         │
   │ provisioner:              │
   │   ebs.csi.aws.com         │
   └──────────────┬────────────┘
-                   │
-                   ▼  StorageClass names the CSI driver
+                 │
+                 ▼  StorageClass names the CSI driver
   ┌──────────────┬────────────┐
   │ aws-ebs-csi-driver        │
   │ (runs as DaemonSet on     │
   │  every EKS worker node)   │
   └──────────────┬────────────┘
-                   │
-                   ▼  calls AWS API
+                 │
+                 ▼  calls AWS API
   ┌──────────────┬────────────┐
   │ AWS EBS Volume (gp3)      │
   │ 20 GiB, encrypted         │
   │ us-east-1a (same AZ as    │
   │ the scheduled Pod)        │
   └──────────────┬────────────┘
-                   │
-                   ▼  volume mounted into Pod by kubelet
+                 │
+                 ▼  volume mounted into Pod by kubelet
   ┌───────────────────────────┐
   │ Pod mounts /data          │
   │ reads/writes persist      │

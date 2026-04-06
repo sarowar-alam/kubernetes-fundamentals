@@ -1,3 +1,0 @@
-# This file ensures the scripts/ directory is tracked by Git.
-# cluster-state.env (created by provision-cluster.sh) is intentionally gitignored
-# because it contains live AWS resource IDs and public IP addresses.

@@ -1,0 +1,515 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: static-site-html
+  labels:
+    app: static-site
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Kubernetes Learning Hub</title>
+      <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+          --bg:      #0d1117;
+          --surface: #161b22;
+          --border:  #21262d;
+          --teal:    #2dd4bf;
+          --blue:    #3b82f6;
+          --purple:  #a78bfa;
+          --green:   #4ade80;
+          --orange:  #fb923c;
+          --pink:    #f472b6;
+          --text:    #e6edf3;
+          --muted:   #8b949e;
+        }
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          background: var(--bg);
+          color: var(--text);
+          min-height: 100vh;
+        }
+
+        /* ── NAV ── */
+        nav {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 2rem;
+          height: 60px;
+          border-bottom: 1px solid var(--border);
+          background: rgba(13,17,23,.85);
+          backdrop-filter: blur(8px);
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
+        .nav-logo {
+          display: flex;
+          align-items: center;
+          gap: .55rem;
+          font-size: 1.05rem;
+          font-weight: 700;
+          color: var(--text);
+          text-decoration: none;
+        }
+        .nav-logo .wheel {
+          width: 28px; height: 28px;
+          border: 3px solid var(--teal);
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          animation: spin 12s linear infinite;
+        }
+        .nav-logo .wheel::before {
+          content: '';
+          width: 8px; height: 8px;
+          background: var(--teal);
+          border-radius: 50%;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .nav-badge {
+          font-size: .7rem;
+          font-weight: 600;
+          padding: .2rem .55rem;
+          border-radius: 999px;
+          background: linear-gradient(135deg, var(--teal), var(--blue));
+          color: #fff;
+          letter-spacing: .05em;
+        }
+
+        /* ── HERO ── */
+        .hero {
+          position: relative;
+          overflow: hidden;
+          padding: 5.5rem 2rem 4.5rem;
+          text-align: center;
+        }
+        .hero::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(ellipse 80% 60% at 50% -10%, rgba(59,130,246,.22) 0%, transparent 70%),
+            radial-gradient(ellipse 60% 50% at 80% 110%,  rgba(45,212,191,.18) 0%, transparent 65%);
+          pointer-events: none;
+        }
+        .hero-kicker {
+          display: inline-flex;
+          align-items: center;
+          gap: .4rem;
+          font-size: .8rem;
+          font-weight: 600;
+          letter-spacing: .1em;
+          text-transform: uppercase;
+          color: var(--teal);
+          margin-bottom: 1.2rem;
+        }
+        .hero-kicker .dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: var(--teal);
+          animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+          0%,100% { opacity: 1; transform: scale(1); }
+          50%      { opacity: .4; transform: scale(.7); }
+        }
+        .hero h1 {
+          font-size: clamp(2.2rem, 5vw, 3.6rem);
+          font-weight: 800;
+          line-height: 1.12;
+          letter-spacing: -.02em;
+          background: linear-gradient(135deg, #fff 0%, var(--teal) 55%, var(--blue) 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          margin-bottom: 1.1rem;
+        }
+        .hero p {
+          max-width: 580px;
+          margin: 0 auto 2.2rem;
+          font-size: 1.1rem;
+          color: var(--muted);
+          line-height: 1.65;
+        }
+        .hero-stats {
+          display: flex;
+          justify-content: center;
+          gap: 3rem;
+          flex-wrap: wrap;
+        }
+        .stat-item { text-align: center; }
+        .stat-num {
+          font-size: 2rem;
+          font-weight: 800;
+          background: linear-gradient(135deg, var(--teal), var(--blue));
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .stat-label {
+          font-size: .78rem;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: .08em;
+          margin-top: .15rem;
+        }
+
+        /* ── SECTION ── */
+        section {
+          padding: 4rem 2rem;
+          max-width: 1100px;
+          margin: 0 auto;
+        }
+        .section-title {
+          text-align: center;
+          font-size: 1.9rem;
+          font-weight: 700;
+          margin-bottom: .6rem;
+        }
+        .section-sub {
+          text-align: center;
+          color: var(--muted);
+          font-size: .95rem;
+          margin-bottom: 2.8rem;
+        }
+
+        /* ── CARDS ── */
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 1.2rem;
+        }
+        .card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 1.6rem;
+          transition: transform .2s, border-color .2s;
+          position: relative;
+          overflow: hidden;
+        }
+        .card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          border-radius: 12px 12px 0 0;
+        }
+        .card:hover { transform: translateY(-4px); border-color: #30363d; }
+        .card.teal::before   { background: linear-gradient(90deg, var(--teal), var(--blue)); }
+        .card.blue::before   { background: linear-gradient(90deg, var(--blue), var(--purple)); }
+        .card.green::before  { background: linear-gradient(90deg, var(--green), var(--teal)); }
+        .card.orange::before { background: linear-gradient(90deg, var(--orange), var(--pink)); }
+        .card.purple::before { background: linear-gradient(90deg, var(--purple), var(--pink)); }
+
+        .card-icon {
+          width: 44px; height: 44px;
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.4rem;
+          margin-bottom: 1rem;
+        }
+        .card.teal   .card-icon { background: rgba(45,212,191,.15); }
+        .card.blue   .card-icon { background: rgba(59,130,246,.15); }
+        .card.green  .card-icon { background: rgba(74,222,128,.15); }
+        .card.orange .card-icon { background: rgba(251,146,60,.15); }
+        .card.purple .card-icon { background: rgba(167,139,250,.15); }
+
+        .card h3 {
+          font-size: 1.05rem;
+          font-weight: 700;
+          margin-bottom: .45rem;
+        }
+        .card p {
+          font-size: .88rem;
+          color: var(--muted);
+          line-height: 1.6;
+          margin-bottom: 1rem;
+        }
+        .tag-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+        .tag {
+          font-size: .7rem;
+          font-weight: 600;
+          padding: .2rem .5rem;
+          border-radius: 6px;
+          border: 1px solid var(--border);
+          color: var(--muted);
+          font-family: "SF Mono", "Fira Code", monospace;
+        }
+
+        /* ── PIPELINE ── */
+        .pipeline {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0;
+          flex-wrap: wrap;
+          margin: 3rem auto;
+          max-width: 900px;
+        }
+        .pipe-step {
+          text-align: center;
+          padding: 1rem 1.2rem;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          min-width: 110px;
+        }
+        .pipe-step .p-icon { font-size: 1.5rem; margin-bottom: .3rem; }
+        .pipe-step .p-label { font-size: .78rem; font-weight: 600; color: var(--muted); }
+        .pipe-arrow {
+          color: var(--teal);
+          font-size: 1.2rem;
+          padding: 0 .5rem;
+        }
+
+        /* ── COMMAND BLOCK ── */
+        .cmd-section {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          overflow: hidden;
+          margin: 2.5rem auto;
+          max-width: 800px;
+        }
+        .cmd-header {
+          display: flex;
+          align-items: center;
+          gap: .6rem;
+          padding: .7rem 1.2rem;
+          background: rgba(255,255,255,.03);
+          border-bottom: 1px solid var(--border);
+          font-size: .8rem;
+          color: var(--muted);
+        }
+        .cmd-dots { display: flex; gap: .35rem; }
+        .cmd-dots span {
+          width: 10px; height: 10px; border-radius: 50%;
+        }
+        .cmd-dots span:nth-child(1) { background: #ff5f57; }
+        .cmd-dots span:nth-child(2) { background: #febc2e; }
+        .cmd-dots span:nth-child(3) { background: #28c840; }
+        .cmd-body {
+          padding: 1.2rem 1.5rem;
+          font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+          font-size: .82rem;
+          line-height: 1.9;
+        }
+        .cmd-body .prompt { color: var(--teal); user-select: none; }
+        .cmd-body .cmd    { color: #e6edf3; }
+        .cmd-body .comment { color: var(--muted); }
+
+        /* ── FOOTER ── */
+        footer {
+          border-top: 1px solid var(--border);
+          padding: 2.5rem 2rem;
+          text-align: center;
+          color: var(--muted);
+          font-size: .83rem;
+        }
+        footer strong { color: var(--teal); }
+        .footer-links { margin-top: .8rem; display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; }
+        .footer-links a { color: var(--muted); text-decoration: none; transition: color .15s; }
+        .footer-links a:hover { color: var(--teal); }
+
+        @media (max-width: 600px) {
+          .hero { padding: 3.5rem 1.2rem 3rem; }
+          .hero-stats { gap: 1.5rem; }
+          .pipe-arrow { display: none; }
+          section { padding: 3rem 1.2rem; }
+        }
+      </style>
+    </head>
+    <body>
+
+      <!-- NAV -->
+      <nav>
+        <a class="nav-logo" href="#">
+          <div class="wheel"><div></div></div>
+          K8s Hub
+        </a>
+        <span class="nav-badge">Batch-09 · Module-11</span>
+      </nav>
+
+      <!-- HERO -->
+      <div class="hero">
+        <div class="hero-kicker">
+          <span class="dot"></span>
+          Running on Kubernetes
+        </div>
+        <h1>Kubernetes<br>Learning Hub</h1>
+        <p>A hands-on reference for core Kubernetes primitives — from Pods to Services, ReplicaSets to Namespaces. Ship, scale, and recover with confidence.</p>
+        <div class="hero-stats">
+          <div class="stat-item">
+            <div class="stat-num">5</div>
+            <div class="stat-label">Resource Types</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">2</div>
+            <div class="stat-label">Cluster Targets</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">∞</div>
+            <div class="stat-label">Self-Healing</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESOURCE CARDS -->
+      <section>
+        <h2 class="section-title">Core Kubernetes Resources</h2>
+        <p class="section-sub">Every primitive you need to deploy and manage containerised workloads.</p>
+
+        <div class="grid">
+
+          <div class="card teal">
+            <div class="card-icon">📦</div>
+            <h3>Pod</h3>
+            <p>The smallest deployable unit. One or more containers sharing a network namespace and storage. Pods are ephemeral — never manage them directly in production.</p>
+            <div class="tag-row">
+              <span class="tag">kubectl apply</span>
+              <span class="tag">kubectl exec</span>
+              <span class="tag">kubectl logs</span>
+            </div>
+          </div>
+
+          <div class="card blue">
+            <div class="card-icon">🔁</div>
+            <h3>ReplicaSet</h3>
+            <p>Ensures a desired number of identical pod replicas are always running. Instantly replaces failed pods to maintain the target count.</p>
+            <div class="tag-row">
+              <span class="tag">spec.replicas</span>
+              <span class="tag">self-healing</span>
+              <span class="tag">kubectl scale</span>
+            </div>
+          </div>
+
+          <div class="card green">
+            <div class="card-icon">🚀</div>
+            <h3>Deployment</h3>
+            <p>Wraps a ReplicaSet and adds rolling updates, version history, and one-command rollback. The standard way to run stateless workloads.</p>
+            <div class="tag-row">
+              <span class="tag">RollingUpdate</span>
+              <span class="tag">rollout undo</span>
+              <span class="tag">maxSurge</span>
+            </div>
+          </div>
+
+          <div class="card orange">
+            <div class="card-icon">🌐</div>
+            <h3>Service</h3>
+            <p>Gives pods a stable DNS name and IP. Routes traffic to healthy pods via label selectors. Supports ClusterIP, NodePort, and LoadBalancer types.</p>
+            <div class="tag-row">
+              <span class="tag">ClusterIP</span>
+              <span class="tag">NodePort</span>
+              <span class="tag">LoadBalancer</span>
+            </div>
+          </div>
+
+          <div class="card purple">
+            <div class="card-icon">🗂️</div>
+            <h3>Namespace</h3>
+            <p>A virtual cluster within a cluster. Scopes resource names, enforces quotas, and isolates teams or environments from each other.</p>
+            <div class="tag-row">
+              <span class="tag">-n dev</span>
+              <span class="tag">ResourceQuota</span>
+              <span class="tag">isolation</span>
+            </div>
+          </div>
+
+          <div class="card teal" style="border-style: dashed;">
+            <div class="card-icon">⚙️</div>
+            <h3>ConfigMap</h3>
+            <p>Decouples configuration from container images. Inject key-value pairs or files (like this page) into pods via environment variables or volume mounts.</p>
+            <div class="tag-row">
+              <span class="tag">volume mount</span>
+              <span class="tag">subPath</span>
+              <span class="tag">env.valueFrom</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- DEPLOYMENT PIPELINE -->
+      <section>
+        <h2 class="section-title">Deployment Flow</h2>
+        <p class="section-sub">How a container goes from manifest to running traffic in Kubernetes.</p>
+
+        <div class="pipeline">
+          <div class="pipe-step">
+            <div class="p-icon">✍️</div>
+            <div class="p-label">YAML Manifest</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="p-icon">⚡</div>
+            <div class="p-label">kubectl apply</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="p-icon">🧠</div>
+            <div class="p-label">API Server</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="p-icon">📅</div>
+            <div class="p-label">Scheduler</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="p-icon">🐳</div>
+            <div class="p-label">Kubelet</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="p-icon">✅</div>
+            <div class="p-label">Pod Running</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- QUICK COMMANDS -->
+      <section>
+        <h2 class="section-title">Quick Commands</h2>
+        <p class="section-sub">Copy-paste essentials for day-to-day cluster operations.</p>
+
+        <div class="cmd-section">
+          <div class="cmd-header">
+            <div class="cmd-dots">
+              <span></span><span></span><span></span>
+            </div>
+            bash — kubectl cheatsheet
+          </div>
+          <div class="cmd-body">
+            <div><span class="prompt">$ </span><span class="cmd">kubectl get all</span> <span class="comment"># all resources in current namespace</span></div>
+            <div><span class="prompt">$ </span><span class="cmd">kubectl apply -f ./manifest.yaml</span></div>
+            <div><span class="prompt">$ </span><span class="cmd">kubectl rollout status deployment/&lt;name&gt;</span></div>
+            <div><span class="prompt">$ </span><span class="cmd">kubectl rollout undo deployment/&lt;name&gt;</span> <span class="comment"># instant rollback</span></div>
+            <div><span class="prompt">$ </span><span class="cmd">kubectl scale deployment &lt;name&gt; --replicas=5</span></div>
+            <div><span class="prompt">$ </span><span class="cmd">kubectl exec -it &lt;pod&gt; -- /bin/sh</span> <span class="comment"># shell into pod</span></div>
+            <div><span class="prompt">$ </span><span class="cmd">kubectl logs &lt;pod&gt; -f</span> <span class="comment"># stream logs</span></div>
+            <div><span class="prompt">$ </span><span class="cmd">kubectl get events --sort-by='.lastTimestamp'</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FOOTER -->
+      <footer>
+        <div>Served by <strong>nginx:alpine</strong> · Deployed via <strong>Kubernetes</strong> · NodePort <strong>30090</strong></div>
+        <div class="footer-links">
+          <a href="https://kubernetes.io/docs/" target="_blank">Official Docs</a>
+          <a href="https://kubernetes.io/docs/reference/kubectl/cheatsheet/" target="_blank">kubectl Cheatsheet</a>
+          <a href="https://github.com/sarowar-alam/kubernetes-fundamentals" target="_blank">GitHub Repo</a>
+        </div>
+      </footer>
+
+    </body>
+    </html>

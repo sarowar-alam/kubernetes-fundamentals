@@ -403,6 +403,96 @@ kubectl delete -f manifests/05-namespace/namespace.yaml
 
 ---
 
+## 06 — Static Site (Kubernetes Learning Hub)
+
+A self-contained static website served by `nginx:alpine`, delivered to the browser via a NodePort Service on port **30090**. No Docker build required — the HTML page is stored in a ConfigMap and mounted directly into the container.
+
+### Resource map
+
+| File | Kind | Name |
+|---|---|---|
+| `configmap.yaml` | ConfigMap | `static-site-html` |
+| `deployment.yaml` | Deployment | `static-site` (2 replicas) |
+| `service-nodeport.yaml` | Service/NodePort | `static-site-nodeport` |
+
+### Apply
+
+Apply in order (ConfigMap must exist before the Deployment mounts it):
+
+```bash
+kubectl apply -f manifests/06-static-site/configmap.yaml
+kubectl apply -f manifests/06-static-site/deployment.yaml
+kubectl apply -f manifests//06-static-site/service-nodeport.yaml
+
+# Or apply the entire folder (kubectl handles ordering automatically)
+kubectl apply -f manifests/06-static-site/
+```
+
+### Verify
+
+```bash
+kubectl get configmap static-site-html
+kubectl get deployment static-site
+kubectl get pods -l app=static-site
+kubectl get svc static-site-nodeport
+```
+
+Expected pod output — both pods must be `Running 1/1`:
+```
+NAME                           READY   STATUS    RESTARTS   AGE
+static-site-7d9b5c6f8-abc12   1/1     Running   0          30s
+static-site-7d9b5c6f8-xyz99   1/1     Running   0          30s
+```
+
+### Access the site
+
+**kubeadm (lab-01-kubeadm)**
+
+```bash
+# Get a node's external IP
+kubectl get nodes -o wide
+
+# Open in browser or curl
+curl http://<node-public-ip>:30090
+```
+
+> Ensure the EC2 security group for your kubeadm nodes allows **inbound TCP 30090** from your IP. Add a custom inbound rule in the AWS console (EC2 → Security Groups → Inbound rules → Add rule: Custom TCP, Port 30090, Source: My IP).
+
+**EKS (lab-02-eks)**
+
+```bash
+# Get a worker node external IP
+kubectl get nodes -o wide   # EXTERNAL-IP column
+
+# Open in browser or curl
+curl http://<worker-node-external-ip>:30090
+```
+
+> On EKS, worker nodes sit in a VPC. Allow **inbound TCP 30090** on the worker node security group: EC2 → Security Groups → find the node group SG (name contains `eks-node-group`) → Inbound rules → Add rule: Custom TCP, Port 30090, Source: My IP.
+
+### Update the site in-place
+
+Because content lives in a ConfigMap, you can redeploy the page without rebuilding any image:
+
+```bash
+# Edit the HTML
+kubectl edit configmap static-site-html
+
+# Restart pods to pick up the updated ConfigMap
+kubectl rollout restart deployment/static-site
+
+# Watch the rolling restart
+kubectl rollout status deployment/static-site
+```
+
+### Cleanup
+
+```bash
+kubectl delete -f manifests/06-static-site/
+```
+
+---
+
 ## Full Sequence — Apply Everything
 
 To bring up all resources in order:
@@ -417,6 +507,7 @@ kubectl apply -f manifests/04-service/service-nodeport.yaml
 # EKS only:
 kubectl apply -f manifests/04-service/service-loadbalancer.yaml
 kubectl apply -f manifests/05-namespace/namespace.yaml
+kubectl apply -f manifests/06-static-site/
 ```
 
 ---
@@ -424,6 +515,7 @@ kubectl apply -f manifests/05-namespace/namespace.yaml
 ## Full Sequence — Tear Everything Down
 
 ```bash
+kubectl delete -f manifests/06-static-site/
 kubectl delete -f manifests/05-namespace/namespace.yaml
 kubectl delete -f manifests/04-service/
 kubectl delete -f manifests/03-deployment/deployment.yaml

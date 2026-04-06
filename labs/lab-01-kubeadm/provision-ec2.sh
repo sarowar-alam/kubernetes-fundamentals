@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
 # provision-ec2.sh
-# Launch EC2 instances across public and private subnets using a named profile.
+# Launch or teardown EC2 instances across public and private subnets.
 #
 # Compatible : Linux  |  macOS  |  Windows Git Bash
 #
 # Usage
-#   bash provision-ec2.sh
+#   bash provision-ec2.sh               # provision (default)
+#   bash provision-ec2.sh --teardown    # terminate all instances in cluster-state.env
 #
 # Override any variable inline without editing the script:
 #   AMI_ID=ami-0abc123 PUBLIC_COUNT=2 bash provision-ec2.sh
@@ -24,20 +25,20 @@ set -euo pipefail
 # =============================================================================
 
 # ── AWS connection ────────────────────────────────────────────────────────────
-AWS_PROFILE="${AWS_PROFILE:-sop}"
+AWS_PROFILE="${AWS_PROFILE:-sarowar-ostad}"
 AWS_REGION="${AWS_REGION:-ap-south-1}"
 
 # ── Required ──────────────────────────────────────────────────────────────────
-AMI_ID="${AMI_ID:-}"                           # e.g. ami-0522ab6e1ddcc7055
-VPC_ID="${VPC_ID:-}"                           # e.g. vpc-0a1b2c3d4e5f67890
-PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-}"       # Subnet that assigns public IPs
-PRIVATE_SUBNET_ID="${PRIVATE_SUBNET_ID:-}"     # Subnet without public-IP assignment
-SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-}"     # Applied to all instances
+AMI_ID="${AMI_ID:-ami-05d2d839d4f73aafb}"              # Ubuntu 22.04 LTS ap-south-1
+VPC_ID="${VPC_ID:-vpc-06f7dead5c49ece64}"
+PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-subnet-0880772cfbeb8bb6f}"   # Subnet that assigns public IPs
+PRIVATE_SUBNET_ID="${PRIVATE_SUBNET_ID:-subnet-054147291dc0bf764}" # Subnet without public-IP assignment
+SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-sg-097d6afb08616ba09}"     # devops-vpc default SG
 
 # ── Optional ──────────────────────────────────────────────────────────────────
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"           # e.g. t3.micro, m5.large
-KEY_NAME="${KEY_NAME:-k8s-lab-key}"                   # EC2 key pair (must exist in the region)
-INSTANCE_PROFILE_NAME="${INSTANCE_PROFILE_NAME:-}"    # IAM instance profile — leave empty to skip
+KEY_NAME="${KEY_NAME:-sarowar-ostad-mumbai}"                   # EC2 key pair (must exist in the region)
+INSTANCE_PROFILE_NAME="${INSTANCE_PROFILE_NAME:-SSM}"             # IAM instance profile
 NAME_PREFIX="${NAME_PREFIX:-node}"                    # Tags: node-public-1, node-private-1, etc.
 
 # ── Instance counts ───────────────────────────────────────────────────────────
@@ -277,7 +278,91 @@ main() {
   echo -e "  State file  :  ${YELLOW}${STATE_FILE}${RESET}"
   echo -e "  Load IPs    :  ${CYAN}source ${STATE_FILE}${RESET}"
   echo -e "  SSH example :  ${CYAN}ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@<PUBLIC_IP>${RESET}"
+  echo -e "  Teardown    :  ${CYAN}bash provision-ec2.sh --teardown${RESET}"
   echo ""
 }
 
-main "$@"
+# =============================================================================
+#  TEARDOWN
+# =============================================================================
+teardown() {
+  local state_file="${STATE_FILE}"
+
+  [[ -f "${state_file}" ]] \
+    || fail "State file not found: ${state_file}\nRun provisioning first, or set STATE_FILE= to the correct path."
+
+  echo ""
+  echo -e "${RED}${BOLD}+==============================================================+${RESET}"
+  echo -e "${RED}${BOLD}|                     TEARDOWN MODE                           |${RESET}"
+  echo -e "${RED}${BOLD}+==============================================================+${RESET}"
+  echo ""
+  echo -e "  Reading state from: ${YELLOW}${state_file}${RESET}"
+  echo ""
+
+  # Source the state file to load instance ID variables
+  # shellcheck source=/dev/null
+  source "${state_file}"
+
+  # Collect all instance IDs from the state file (keys matching *_INSTANCE_ID)
+  TERM_IDS=()
+  while IFS='=' read -r key value; do
+    [[ "${key}" =~ _INSTANCE_ID$ ]] && [[ -n "${value}" ]] && TERM_IDS+=("${value}")
+  done < "${state_file}"
+
+  [[ ${#TERM_IDS[@]} -eq 0 ]] \
+    && fail "No instance IDs found in ${state_file}. Nothing to terminate."
+
+  echo -e "  Instances to terminate:"
+  for iid in "${TERM_IDS[@]}"; do
+    # Resolve the Name tag for a friendly display
+    local name
+    name=$(aws ec2 describe-instances \
+      --profile      "${AWS_PROFILE}" \
+      --region       "${AWS_REGION}" \
+      --instance-ids "${iid}" \
+      --query        "Reservations[0].Instances[0].Tags[?Key=='Name']|[0].Value" \
+      --output       text 2>/dev/null || echo "unknown")
+    echo -e "    ${RED}${iid}${RESET}  (${name})"
+  done
+  echo ""
+
+  # Confirmation prompt ─ safe guard against accidental runs
+  read -r -p "  Type 'yes' to confirm termination: " confirm
+  echo ""
+  [[ "${confirm}" == "yes" ]] \
+    || { echo -e "  ${YELLOW}Aborted.${RESET} Nothing was terminated."; exit 0; }
+
+  step "Terminating ${#TERM_IDS[@]} instance(s)..."
+  aws ec2 terminate-instances \
+    --profile      "${AWS_PROFILE}" \
+    --region       "${AWS_REGION}" \
+    --instance-ids "${TERM_IDS[@]}" \
+    --output       table \
+    --query        "TerminatingInstances[*].{ID:InstanceId,State:CurrentState.Name}"
+
+  step "Waiting for all instances to reach 'terminated' state..."
+  aws ec2 wait instance-terminated \
+    --profile      "${AWS_PROFILE}" \
+    --region       "${AWS_REGION}" \
+    --instance-ids "${TERM_IDS[@]}"
+  ok "All instances terminated"
+
+  step "Removing state file: ${state_file}"
+  rm -f "${state_file}"
+  ok "State file removed"
+
+  echo ""
+  echo -e "${GREEN}${BOLD}+==============================================================+${RESET}"
+  echo -e "${GREEN}${BOLD}|                  TEARDOWN COMPLETE                          |${RESET}"
+  echo -e "${GREEN}${BOLD}+==============================================================+${RESET}"
+  echo ""
+}
+
+# =============================================================================
+#  DISPATCHER
+# =============================================================================
+case "${1:-}" in
+  --teardown) teardown ;;
+  "")         main "$@" ;;
+  *) fail "Unknown argument: $1\nUsage: bash provision-ec2.sh [--teardown]" ;;
+esac

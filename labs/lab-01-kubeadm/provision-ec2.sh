@@ -43,7 +43,7 @@ NAME_PREFIX="${NAME_PREFIX:-node}"                    # Tags: node-public-1, nod
 
 # ── Instance counts ───────────────────────────────────────────────────────────
 PUBLIC_COUNT="${PUBLIC_COUNT:-1}"    # Instances in the public subnet  (receive public IPs)
-PRIVATE_COUNT="${PRIVATE_COUNT:-2}"  # Instances in the private subnet (private IPs only)
+PRIVATE_COUNT="${PRIVATE_COUNT:-0}"  # Instances in the private subnet (private IPs only)
 
 # ── Output ────────────────────────────────────────────────────────────────────
 STATE_FILE="${STATE_FILE:-./cluster-state.env}"   # Written after provisioning completes
@@ -90,11 +90,13 @@ validate() {
   [[ "${missing}" -eq 1 ]] \
     && fail "Set the missing required values above (edit the script or export env vars) and re-run."
 
-  # Validate counts are positive integers
-  [[ "${PUBLIC_COUNT}"  =~ ^[1-9][0-9]*$ ]] \
-    || fail "PUBLIC_COUNT must be a positive integer (got: '${PUBLIC_COUNT}')"
-  [[ "${PRIVATE_COUNT}" =~ ^[1-9][0-9]*$ ]] \
-    || fail "PRIVATE_COUNT must be a positive integer (got: '${PRIVATE_COUNT}')"
+  # Validate counts are non-negative integers (0 is allowed — skips that subnet)
+  [[ "${PUBLIC_COUNT}"  =~ ^[0-9]+$ ]] \
+    || fail "PUBLIC_COUNT must be a non-negative integer (got: '${PUBLIC_COUNT}')"
+  [[ "${PRIVATE_COUNT}" =~ ^[0-9]+$ ]] \
+    || fail "PRIVATE_COUNT must be a non-negative integer (got: '${PRIVATE_COUNT}')"
+  [[ $(( PUBLIC_COUNT + PRIVATE_COUNT )) -gt 0 ]] \
+    || fail "PUBLIC_COUNT and PRIVATE_COUNT cannot both be 0."
 
   ok "AWS CLI present"
   ok "Profile '${AWS_PROFILE}' authenticated"
@@ -178,24 +180,28 @@ main() {
   validate
 
   # ── Launch public subnet instances ─────────────────────────────────────────
-  step "Launching ${PUBLIC_COUNT} instance(s) in public subnet (${PUBLIC_SUBNET_ID})..."
   PUBLIC_IDS=()
-  for i in $(seq 1 "${PUBLIC_COUNT}"); do
-    inst_name="${NAME_PREFIX}-public-${i}"
-    iid=$(launch_instance "${inst_name}" "${PUBLIC_SUBNET_ID}" "true")
-    PUBLIC_IDS+=("${iid}")
-    ok "${inst_name}  ->  ${iid}"
-  done
+  if [[ "${PUBLIC_COUNT}" -gt 0 ]]; then
+    step "Launching ${PUBLIC_COUNT} instance(s) in public subnet (${PUBLIC_SUBNET_ID})..."
+    for i in $(seq 1 "${PUBLIC_COUNT}"); do
+      inst_name="${NAME_PREFIX}-public-${i}"
+      iid=$(launch_instance "${inst_name}" "${PUBLIC_SUBNET_ID}" "true")
+      PUBLIC_IDS+=("${iid}")
+      ok "${inst_name}  ->  ${iid}"
+    done
+  fi
 
-  # ── Launch private subnet instances ────────────────────────────────────────
-  step "Launching ${PRIVATE_COUNT} instance(s) in private subnet (${PRIVATE_SUBNET_ID})..."
+  # ── Launch private subnet instances ────────────────────────────────────────────
   PRIVATE_IDS=()
-  for i in $(seq 1 "${PRIVATE_COUNT}"); do
-    inst_name="${NAME_PREFIX}-private-${i}"
-    iid=$(launch_instance "${inst_name}" "${PRIVATE_SUBNET_ID}" "false")
-    PRIVATE_IDS+=("${iid}")
-    ok "${inst_name}  ->  ${iid}"
-  done
+  if [[ "${PRIVATE_COUNT}" -gt 0 ]]; then
+    step "Launching ${PRIVATE_COUNT} instance(s) in private subnet (${PRIVATE_SUBNET_ID})..."
+    for i in $(seq 1 "${PRIVATE_COUNT}"); do
+      inst_name="${NAME_PREFIX}-private-${i}"
+      iid=$(launch_instance "${inst_name}" "${PRIVATE_SUBNET_ID}" "false")
+      PRIVATE_IDS+=("${iid}")
+      ok "${inst_name}  ->  ${iid}"
+    done
+  fi
 
   # ── Wait for all instances to reach 'running' ───────────────────────────────
   ALL_IDS=("${PUBLIC_IDS[@]}" "${PRIVATE_IDS[@]}")

@@ -153,6 +153,3 @@ managedNodeGroups:
         ebs: true
         # cloudWatch: allows nodes to send logs to CloudWatch
         cloudWatch: true
-        # ssm: attaches AmazonSSMManagedInstanceCore — enables SSM Session Manager
-        # access to worker nodes without needing open SSH ports (matches SSM instance profile)
-        ssm: true

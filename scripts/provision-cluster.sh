@@ -34,7 +34,7 @@ AWS_PROFILE="sop"
 REGION="ap-south-1"
 INSTANCE_TYPE="t3.medium"
 KEY_NAME="k8s-lab-key"            # Name of an existing EC2 key pair
-CLUSTER_NAME="ostad-batch09-k8s"
+CLUSTER_NAME="k8s-lab-cluster"
 STATE_FILE="cluster-state.env"    # Written here; used by teardown-cluster.sh
 
 # Ubuntu 22.04 LTS AMI (dynamically fetched — never goes stale)
@@ -281,7 +281,7 @@ MASTER_ID=$(aws ec2 run-instances \
   --security-group-ids  "${SG_ID}" \
   --block-device-mappings "[{\"DeviceName\":\"/dev/sda1\",\"Ebs\":{\"VolumeSize\":20,\"DeleteOnTermination\":true}}]" \
   --user-data           "${USERDATA_MASTER}" \
-  --tag-specifications  "ResourceType=instance,Tags=[{Key=Name,Value=${CLUSTER_NAME}-master},{Key=Role,Value=master},{Key=Project,Value=ostad-batch09}]" \
+  --tag-specifications  "ResourceType=instance,Tags=[{Key=Name,Value=${CLUSTER_NAME}-master},{Key=Role,Value=master},{Key=Project,Value=k8s-lab}]" \
   --query "Instances[0].InstanceId" \
   --output text)
 
@@ -296,7 +296,7 @@ WORKER1_ID=$(aws ec2 run-instances \
   --security-group-ids  "${SG_ID}" \
   --block-device-mappings "[{\"DeviceName\":\"/dev/sda1\",\"Ebs\":{\"VolumeSize\":20,\"DeleteOnTermination\":true}}]" \
   --user-data           "${USERDATA_WORKER1}" \
-  --tag-specifications  "ResourceType=instance,Tags=[{Key=Name,Value=${CLUSTER_NAME}-worker-1},{Key=Role,Value=worker},{Key=Project,Value=ostad-batch09}]" \
+  --tag-specifications  "ResourceType=instance,Tags=[{Key=Name,Value=${CLUSTER_NAME}-worker-1},{Key=Role,Value=worker},{Key=Project,Value=k8s-lab}]" \
   --query "Instances[0].InstanceId" \
   --output text)
 
@@ -311,7 +311,7 @@ WORKER2_ID=$(aws ec2 run-instances \
   --security-group-ids  "${SG_ID}" \
   --block-device-mappings "[{\"DeviceName\":\"/dev/sda1\",\"Ebs\":{\"VolumeSize\":20,\"DeleteOnTermination\":true}}]" \
   --user-data           "${USERDATA_WORKER2}" \
-  --tag-specifications  "ResourceType=instance,Tags=[{Key=Name,Value=${CLUSTER_NAME}-worker-2},{Key=Role,Value=worker},{Key=Project,Value=ostad-batch09}]" \
+  --tag-specifications  "ResourceType=instance,Tags=[{Key=Name,Value=${CLUSTER_NAME}-worker-2},{Key=Role,Value=worker},{Key=Project,Value=k8s-lab}]" \
   --query "Instances[0].InstanceId" \
   --output text)
 

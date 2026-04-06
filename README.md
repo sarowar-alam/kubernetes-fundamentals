@@ -1,5 +1,5 @@
-# Kubernetes Fundamentals — Module 11
-### Ostad | Batch-09 | DevOps Track
+# Kubernetes Fundamentals
+### DevOps Track
 
 ---
 

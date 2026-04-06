@@ -37,7 +37,7 @@ kind: Namespace
 metadata:
   name: dev
   labels:
-    team: ostad-batch09
+    team: devops-students
     environment: development
 
 ---
@@ -47,5 +47,5 @@ kind: Namespace
 metadata:
   name: staging
   labels:
-    team: ostad-batch09
+    team: devops-students
     environment: staging

@@ -26,7 +26,7 @@ kind: ClusterConfig
 metadata:
   # The name of your EKS cluster
   # This appears in AWS Console → EKS → Clusters
-  name: ostad-batch09-eks
+  name: k8s-demo-eks
 
   # AWS region where the cluster will be created
   # ap-south-1 = Mumbai — closest to Bangladesh, lower latency
@@ -39,7 +39,7 @@ metadata:
   # Tags are key-value labels applied to all AWS resources created
   # Useful for billing reports and resource tracking
   tags:
-    Project: ostad-batch09
+    Project: k8s-lab
     Module: kubernetes-fundamentals
     ManagedBy: eksctl
 
@@ -141,7 +141,7 @@ managedNodeGroups:
     # Tags for AWS resource tracking and billing
     tags:
       NodeGroup: workers
-      Project: ostad-batch09
+      Project: k8s-lab
 
     # IAM policies attached to the node's IAM role
     # These control what AWS APIs the node itself can call

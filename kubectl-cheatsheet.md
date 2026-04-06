@@ -1,4 +1,4 @@
-# kubectl Cheatsheet — Kubernetes Fundamentals (Module 11)
+# kubectl Cheatsheet — Kubernetes Fundamentals
 
 ---
 
@@ -67,7 +67,7 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ### After eksctl create cluster
 ```bash
 # eksctl does this automatically, but you can also run:
-aws eks update-kubeconfig --name ostad-batch09-eks --region ap-south-1 --profile sop
+aws eks update-kubeconfig --name k8s-demo-eks --region ap-south-1 --profile sop
 ```
 
 ---

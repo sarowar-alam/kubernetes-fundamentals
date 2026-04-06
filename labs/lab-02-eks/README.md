@@ -71,7 +71,7 @@ cat labs/lab-02-eks/cluster-config.yaml
 #### `metadata` block
 ```yaml
 metadata:
-  name: ostad-batch09-eks   # Name visible in AWS Console
+  name: k8s-demo-eks   # Name visible in AWS Console
   region: ap-south-1        # Mumbai — close to our audience
   version: "1.29"           # Kubernetes version
 ```
@@ -166,7 +166,7 @@ Updates your ~/.kube/config with EKS context
 
 **Expected output:**
 ```
-[✓]  EKS cluster "ostad-batch09-eks" in "ap-south-1" region is ready
+[✓]  EKS cluster "k8s-demo-eks" in "ap-south-1" region is ready
 ```
 
 ---
@@ -255,7 +255,7 @@ kubectl config get-contexts
 kubectl config use-context kubernetes-admin@kubernetes
 
 # Switch to EKS
-kubectl config use-context ostad-batch09-eks.ap-south-1.eksctl.io
+kubectl config use-context k8s-demo-eks.ap-south-1.eksctl.io
 
 # Check which one you're talking to
 kubectl config current-context

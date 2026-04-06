@@ -108,12 +108,79 @@ Run with: `docker compose up`
 
 **Kubernetes (same app):**
 ```yaml
-# Two Deployments + Two Services
-# web-deployment.yaml, redis-deployment.yaml
-# web-service.yaml (NodePort), redis-service.yaml (ClusterIP)
+# web-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+---
+# web-service.yaml  (external access via NodePort)
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+---
+# redis-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cache
+  template:
+    metadata:
+      labels:
+        app: cache
+    spec:
+      containers:
+        - name: cache
+          image: redis:7
+          ports:
+            - containerPort: 6379
+---
+# redis-service.yaml  (internal only — ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: cache
+spec:
+  type: ClusterIP
+  selector:
+    app: cache
+  ports:
+    - port: 6379
+      targetPort: 6379
 ```
 
 Run with: `kubectl apply -f .`
+
+> **Why so much more YAML?** Docker Compose is a convenience wrapper for a single machine. Kubernetes YAML is explicit by design — every object (Deployment, Service) is declared separately so each can be managed, scaled, and updated independently in production.
 
 **Key insight:** Docker Compose is great for your laptop. Kubernetes is for the real world where you need reliability, scale, and automation.
 

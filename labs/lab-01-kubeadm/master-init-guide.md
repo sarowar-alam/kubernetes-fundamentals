@@ -102,13 +102,29 @@ worker-join-guide.md
 ```bash
 sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release wget
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release wget git
 ```
 
-### ✅ Verify
+**Why each package:**
+
+| Package | Purpose |
+|---|---|
+| `apt-transport-https` | Lets `apt` fetch packages over HTTPS (required for Kubernetes and Docker repos) |
+| `ca-certificates` | Trusts HTTPS certificates from those repos |
+| `curl` | Downloads GPG keys and bootstraps installation scripts |
+| `gnupg` | Verifies GPG signatures on repo keys |
+| `lsb-release` | Identifies the Ubuntu version (used in apt source entries) |
+| `wget` | Alternative downloader used by some tooling |
+| `git` | Clones this repository on the server |
+
+`DEBIAN_FRONTEND=noninteractive` prevents upgrade prompts from blocking the script (e.g. service restart dialogs).
+
+### ✅ Verify 2.1
 ```bash
 curl --version | head -1
 # Expected: curl 7.x.x or 8.x.x
+git --version
+# Expected: git version 2.x.x
 ```
 
 ---
@@ -163,6 +179,14 @@ lsmod | grep -E 'overlay|br_netfilter'
 ---
 
 ### 2.4 Configure kernel networking parameters
+
+These three sysctl parameters allow Kubernetes networking to function correctly.
+
+| Parameter | Why it is required |
+|---|---|
+| `net.bridge.bridge-nf-call-iptables = 1` | Makes iptables see traffic crossing Linux bridges. Without this, kube-proxy rules are bypassed and pod-to-service routing breaks. |
+| `net.bridge.bridge-nf-call-ip6tables = 1` | Same as above for IPv6 traffic — required even on IPv4-only clusters because some CNI plugins use IPv6 internally. |
+| `net.ipv4.ip_forward = 1` | Allows the kernel to forward packets between network interfaces. Without this, pods on different nodes cannot route to each other. |
 
 ```bash
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
@@ -235,6 +259,16 @@ grep SystemdCgroup /etc/containerd/config.toml
 ---
 
 ### 2.6 Install kubeadm, kubelet, kubectl
+
+These are the three Kubernetes node binaries:
+
+| Binary | Role |
+|---|---|
+| `kubelet` | The node agent. Runs on every node. Receives pod specs from the API server and instructs containerd to start/stop containers. It is the bridge between Kubernetes and the container runtime. |
+| `kubeadm` | The bootstrapping tool. Initialises the cluster on the master and generates join tokens for workers. Not used for day-to-day operations. |
+| `kubectl` | The CLI. Sends commands to the API server. Installed on the master so you can manage the cluster from here. |
+
+`apt-mark hold` pins all three to version 1.29.x — this prevents `apt upgrade` from silently upgrading them to an incompatible version and breaking the cluster.
 
 ```bash
 # Add Kubernetes apt repository (K8s 1.29)
@@ -327,6 +361,11 @@ kubeadm join 10.0.1.x:6443 --token abcdef.1234567890abcdef \
 
 ## STEP 4 — Configure kubectl
 
+`kubeadm init` writes the cluster's admin credentials to `/etc/kubernetes/admin.conf` (readable only by root).  
+The three commands below copy that file to the `ubuntu` user's home directory so that every subsequent `kubectl` command works without `sudo`.
+
+**Why this matters:** `kubectl` reads `~/.kube/config` by default. Without this copy, all `kubectl` commands fail with `connection refused` or `permission denied`.
+
 ```bash
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
@@ -399,9 +438,14 @@ k8s-master   Ready    control-plane   5m    v1.29.0
 # Option A: Read from saved log (valid for 24h from init)
 grep "kubeadm join" /tmp/kubeadm-init.log
 
-# Option B: Generate a fresh token (use this after 24h or if token lost)
+# Option B: Read from the file the script wrote
+cat /tmp/worker-join-command.txt
+
+# Option C: Generate a fresh token (use this after 24h or if token lost)
 sudo kubeadm token create --print-join-command
 ```
+
+> `master-init.sh` saves the join command to `/tmp/worker-join-command.txt` automatically at the end of its run.
 
 **Example output:**
 ```

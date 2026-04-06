@@ -26,16 +26,15 @@ EKS (Elastic Kubernetes Service) is AWS's **managed Kubernetes service**.
 
 ## Prerequisites
 
-- AWS CLI v2 installed and configured with profile `sop`
-- `eksctl` installed (see `install-eksctl.sh`)
-- `kubectl` installed (`kubectl version --client`)
+- AWS CLI v2, `eksctl`, and `kubectl` installed — run `install-eksctl.sh` to get all three
+- AWS profile `sarowar-ostad` configured (`aws configure --profile sarowar-ostad`)
 - IAM user/role with admin or EKS full access permissions
 
 ### Verify tools are ready
 
 ```bash
 # Check AWS CLI and profile
-aws sts get-caller-identity --profile sop
+aws sts get-caller-identity --profile sarowar-ostad
 
 # Check eksctl
 eksctl version
@@ -119,15 +118,25 @@ eksctl create iamidentitymapping \
 
 ---
 
-## Step 1 — Install eksctl
+## Step 1 — Install Tools
+
+`install-eksctl.sh` installs all three required tools in one run:
+
+| Tool | Purpose |
+|---|---|
+| `eksctl` | Creates/deletes EKS clusters from a YAML config |
+| `kubectl` | Sends commands to the Kubernetes API (deploy, scale, inspect) |
+| `aws` | Authenticates to AWS; used by eksctl and to update kubeconfig |
+
+Each tool is checked first — if already installed, it is skipped.
 
 ```bash
 chmod +x labs/lab-02-eks/install-eksctl.sh
-./labs/lab-02-eks/install-eksctl.sh
+sudo ./labs/lab-02-eks/install-eksctl.sh
 ```
 
 **What is eksctl?**  
-eksctl is the official command-line tool for EKS. It reads a YAML config file (like the one we have) and makes hundreds of AWS API calls for you — creating VPCs, security groups, IAM roles, the EKS cluster, and EC2 node groups.
+eksctl is the official command-line tool for EKS. It reads a YAML config file (like the one we have) and makes hundreds of AWS API calls for you — creating VPCs, NAT gateways, security groups, IAM roles, the EKS cluster, and EC2 node groups.
 
 ---
 
@@ -144,12 +153,12 @@ cat labs/lab-02-eks/cluster-config.yaml
 #### `metadata` block
 ```yaml
 metadata:
-  name: k8s-demo-eks   # Name visible in AWS Console
-  region: ap-south-1        # Mumbai region
-  version: "1.29"           # Kubernetes version
+  name: k8s-demo-eks    # Name visible in AWS Console → EKS → Clusters
+  region: ap-south-1    # Mumbai region
+  version: "1.35"       # Kubernetes version — always pin, never use 'latest'
 ```
 
-**Real-world tip:** Always pin the K8s version. Never use `latest`. Upgrades should be planned, tested, not accidental.
+**Real-world tip:** Upgrade one minor version at a time (e.g. 1.35 → 1.36). Skipping versions is unsupported and can break the cluster.
 
 ---
 
@@ -192,16 +201,49 @@ These are pre-integrated plugins AWS maintains for you:
 
 ---
 
+#### `autoModeConfig` block
+
+```yaml
+autoModeConfig:
+  enabled: false
+```
+
+This disables eksctl Auto Mode, which preserves the current behaviour of creating managed node groups and addons explicitly. Without this flag, a future eksctl release will skip node group and addon creation by default.
+
+---
+
+#### `vpc` block
+
+```yaml
+vpc:
+  cidr: "192.168.0.0/16"   # Non-overlapping with any existing VPC
+  nat:
+    gateway: Single          # One shared NAT Gateway (cost-optimised)
+  clusterEndpoints:
+    publicAccess: true       # kubectl from your laptop reaches the API
+    privateAccess: true      # nodes inside VPC reach the API privately
+```
+
+eksctl creates and fully owns this VPC. Running `eksctl delete cluster` removes the VPC, subnets, NAT gateway, Internet Gateway, and route tables automatically — no manual cleanup needed.
+
+`nat.gateway: Single` uses one NAT Gateway shared across all AZs (~$0.06/hr). Change to `HighlyAvailable` for production to avoid an AZ-level SPOF.
+
+---
+
 #### `managedNodeGroups` block
 
 ```yaml
-instanceType: t3.medium   # Worker node size
-minSize: 1                 # Always keep 1 node alive
-maxSize: 3                 # Auto-scale up to 3 during load
-desiredCapacity: 2         # Start with 2 nodes
+instanceType: t3.medium    # 2 vCPU / 4 GB RAM — suitable for demos
+minSize: 1                  # Always keep at least 1 node running
+maxSize: 2                  # Auto-scale ceiling — caps your EC2 spend
+desiredCapacity: 1          # Start with 1 node
+amiFamily: AmazonLinux2023  # Required for Kubernetes 1.30+ (AL2 is EOL)
+volumetype: gp3             # Faster and cheaper than gp2
+ebsOptimized: true          # Dedicated EBS bandwidth per node
+privateNetworking: true     # Nodes in private subnets; reach internet via NAT
 ```
 
-**Cost insight:** You pay for nodes, not the control plane (well, $0.10/hr for the cluster, but nodes are the real cost). Setting `maxSize: 3` means your AWS bill never scales beyond 3x t3.medium without your knowing.
+**Cost insight:** EKS control plane is $0.10/hr regardless of node count. Nodes are the main cost driver. With `maxSize: 2` and `desiredCapacity: 1`, the cluster starts at ~$0.14/hr (1x t3.medium + NAT gateway).
 
 ---
 
@@ -379,7 +421,7 @@ Also verify in AWS Console:
 
 | Problem | Fix |
 |---|---|
-| `eksctl create cluster` fails on IAM permissions | Check: `aws iam get-user --profile sop` → ensure admin or EKS policies |
+| `eksctl create cluster` fails on IAM permissions | Check: `aws iam get-user --profile sarowar-ostad` → ensure admin or EKS policies |
 | `kubectl` shows wrong cluster | `kubectl config use-context <eks-context-name>` |
 | LoadBalancer stuck in `<pending>` | Wait 90 seconds; check `kubectl describe svc nginx-eks` for events |
 | Nodes not joining the cluster | Check CloudFormation stack for the node group — look at Events tab |

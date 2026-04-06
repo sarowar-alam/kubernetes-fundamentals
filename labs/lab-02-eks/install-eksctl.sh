@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
 # install-eksctl.sh
-# Downloads and installs eksctl AND kubectl on Linux/macOS/Windows.
+# Downloads and installs eksctl, kubectl, AND AWS CLI v2 on Linux/macOS/Windows.
 #
 # eksctl is the official CLI for creating EKS clusters.
 # kubectl is the Kubernetes CLI for managing cluster workloads.
+# aws   is the AWS CLI for authenticating and managing AWS resources.
 #
 # eksctl reads a cluster config YAML and handles everything:
 #   - VPC, subnets, security groups
@@ -24,14 +25,15 @@
 set -euo pipefail
 
 echo "=================================================="
-echo "  Installing eksctl + kubectl"
+echo "  Installing eksctl + kubectl + AWS CLI v2"
 echo "=================================================="
 
 # ---------------------------------------------------------------------------
-# Early-exit guard: skip install if both tools are already present
+# Early-exit guard: skip install if all three tools are already present
 # ---------------------------------------------------------------------------
 EKSCTL_OK=false
 KUBECTL_OK=false
+AWSCLI_OK=false
 if command -v eksctl &>/dev/null; then
   echo "[OK] eksctl is already installed: $(eksctl version)"
   EKSCTL_OK=true
@@ -40,11 +42,15 @@ if command -v kubectl &>/dev/null; then
   echo "[OK] kubectl is already installed: $(kubectl version --client --short 2>/dev/null || kubectl version --client 2>/dev/null | head -1)"
   KUBECTL_OK=true
 fi
-if [[ "${EKSCTL_OK}" == "true" && "${KUBECTL_OK}" == "true" ]]; then
+if command -v aws &>/dev/null; then
+  echo "[OK] aws cli is already installed: $(aws --version)"
+  AWSCLI_OK=true
+fi
+if [[ "${EKSCTL_OK}" == "true" && "${KUBECTL_OK}" == "true" && "${AWSCLI_OK}" == "true" ]]; then
   echo ""
-  echo "  Both tools are installed. Nothing to do."
-  echo "  To upgrade on Linux/macOS : sudo eksctl upgrade  |  sudo kubectl ..."
-  echo "  To upgrade on Windows     : choco upgrade eksctl kubernetes-cli -y"
+  echo "  All three tools are installed. Nothing to do."
+  echo "  To upgrade on Linux/macOS : re-run this script or use your package manager"
+  echo "  To upgrade on Windows     : choco upgrade eksctl kubernetes-cli awscli -y"
   echo ""
   exit 0
 fi
@@ -108,20 +114,20 @@ if [[ "${OS_NAME}" == "windows" ]]; then
 
   [[ "${EKSCTL_OK}" == "false" ]] && "${CHOCO_PATH}" install eksctl -y
   [[ "${KUBECTL_OK}" == "false" ]] && "${CHOCO_PATH}" install kubernetes-cli -y
+  [[ "${AWSCLI_OK}" == "false" ]]  && "${CHOCO_PATH}" install awscli -y
 
   echo ""
-  echo "[OK] eksctl + kubectl installed successfully."
+  echo "[OK] eksctl + kubectl + AWS CLI v2 installed successfully."
   echo ""
   echo "  IMPORTANT: Open a new Git Bash window so the updated PATH takes effect,"
-  echo "  then verify with:  eksctl version  &&  kubectl version --client"
+  echo "  then verify with:  eksctl version  &&  kubectl version --client  &&  aws --version"
   echo ""
   echo "=================================================="
   echo "  TOOLS READY"
   echo "=================================================="
   echo ""
-  echo "  Also ensure these are installed and configured:"
-  echo "    - AWS CLI v2   : aws --version"
-  echo "    - AWS profile  : aws configure --profile sarowar-ostad"
+  echo "  Configure AWS access:"
+  echo "    aws configure --profile sarowar-ostad"
   echo ""
   echo "  Next step: create EKS cluster:"
   echo "    eksctl create cluster -f labs/lab-02-eks/cluster-config.yaml"
@@ -155,14 +161,31 @@ if [[ "${KUBECTL_OK}" == "false" ]]; then
   echo "[OK] kubectl installed: $(kubectl version --client 2>/dev/null | head -1)"
 fi
 
+# ── AWS CLI v2 ───────────────────────────────────────────────────────────────
+if [[ "${AWSCLI_OK}" == "false" ]]; then
+  echo "[INFO] Installing AWS CLI v2 for ${OS_NAME}/${ARCH_NAME}..."
+  if [[ "${OS_NAME}" == "linux" ]]; then
+    AWSCLI_URL="https://awscli.amazonaws.com/awscli-exe-linux-${ARCH_NAME/amd64/x86_64}.zip"
+    curl -fsSL -o /tmp/awscliv2.zip "${AWSCLI_URL}"
+    unzip -q /tmp/awscliv2.zip -d /tmp
+    sudo /tmp/aws/install
+    rm -rf /tmp/awscliv2.zip /tmp/aws
+  elif [[ "${OS_NAME}" == "darwin" ]]; then
+    AWSCLI_URL="https://awscli.amazonaws.com/AWSCLIV2.pkg"
+    curl -fsSL -o /tmp/AWSCLIV2.pkg "${AWSCLI_URL}"
+    sudo installer -pkg /tmp/AWSCLIV2.pkg -target /
+    rm -f /tmp/AWSCLIV2.pkg
+  fi
+  echo "[OK] aws cli installed: $(aws --version)"
+fi
+
 echo ""
 echo "=================================================="
 echo "  TOOLS READY"
 echo "=================================================="
 echo ""
-echo "  Also ensure these are installed and configured:"
-echo "    - AWS CLI v2   : aws --version"
-echo "    - AWS profile  : aws configure --profile sarowar-ostad"
+echo "  Configure AWS access (run once per profile):"
+echo "    aws configure --profile sarowar-ostad"
 echo ""
 echo "  Next step: create EKS cluster:"
 echo "    eksctl create cluster -f labs/lab-02-eks/cluster-config.yaml"

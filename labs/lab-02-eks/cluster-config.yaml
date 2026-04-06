@@ -7,9 +7,12 @@
 #
 # Estimated cost (ap-south-1):
 #   EKS Control Plane : $0.10/hr  (billed even with 0 nodes)
-#   2x t3.medium nodes: ~$0.08/hr
-#   Total             : ~$0.18/hr → ~$0.36 per 2-hour session
-#   Note: uses existing devops-vpc — no new NAT/IGW charges from eksctl
+#   1x t3.medium node : ~$0.04/hr
+#   NAT Gateway       : ~$0.06/hr + data transfer
+#   Total             : ~$0.20/hr → ~$0.40 per 2-hour session
+#
+# eksctl creates and owns the entire VPC — running 'delete cluster' removes
+# all networking resources (VPC, subnets, IGW, NAT, route tables) automatically.
 #
 # ALWAYS DELETE when done: eksctl delete cluster -f cluster-config.yaml
 # =============================================================================
@@ -65,27 +68,30 @@ iam:
   withOIDC: true
 
 # ---------------------------------------------------------------------------
-# vpc: Use existing devops-vpc instead of creating a new one
-# Without this, eksctl creates a brand-new VPC — which fails when the AWS
-# account has reached the VPC/Internet Gateway limit (default: 5 per region).
+# vpc: eksctl-managed VPC — created on 'create cluster', deleted on 'delete cluster'
 #
-# Subnets span 2 AZs (required by EKS for control plane high availability):
-#   ap-south-1a — public1 + private1
-#   ap-south-1b — public2 + private2
+# Best-practice layout:
+#   Public subnets  — Internet Gateway, NAT Gateway, load balancers
+#   Private subnets — worker nodes (no direct internet exposure)
+#
+# nat.gateway: Single — one NAT Gateway shared across all AZs.
+#   Cost: ~$0.06/hr. Use 'HighlyAvailable' (one per AZ) for production.
+#
+# CIDR 192.168.0.0/16 is eksctl's default — non-overlapping with devops-vpc
+# (10.0.0.0/16), so both VPCs can coexist or be peered later.
 # ---------------------------------------------------------------------------
 vpc:
-  id: "vpc-06f7dead5c49ece64"
-  subnets:
-    public:
-      ap-south-1a:
-        id: "subnet-0880772cfbeb8bb6f"  # devops-subnet-public1-ap-south-1a
-      ap-south-1b:
-        id: "subnet-0dd1f84bfb31ec9f9"  # devops-subnet-public2-ap-south-1b
-    private:
-      ap-south-1a:
-        id: "subnet-054147291dc0bf764"  # devops-subnet-private1-ap-south-1a
-      ap-south-1b:
-        id: "subnet-0c3d55d160afa0e5e"  # devops-subnet-private2-ap-south-1b
+  cidr: "192.168.0.0/16"
+  nat:
+    # Single NAT Gateway: cost-optimised for lab/demo use
+    # Change to 'HighlyAvailable' for production (one NAT per AZ)
+    gateway: Single
+  clusterEndpoints:
+    # publicAccess: kubectl and eksctl reach the API from your laptop
+    publicAccess: true
+    # privateAccess: nodes inside the VPC reach the API over the private endpoint
+    # Required when nodes are in private subnets (no internet path to the public endpoint)
+    privateAccess: true
 
 # ---------------------------------------------------------------------------
 # addons: Kubernetes plugins managed by AWS
@@ -156,11 +162,10 @@ managedNodeGroups:
     # Eliminates I/O contention when running disk-heavy workloads
     ebsOptimized: true
 
-    # Place nodes in public subnets so they can reach the EKS API and ECR
-    # without a NAT gateway. devops-vpc has no NAT, so private subnet nodes
-    # cannot register with the cluster or pull container images.
-    # In production (with NAT): set this to true for node isolation.
-    privateNetworking: false
+    # Place nodes in private subnets — best practice for production.
+    # Nodes reach the internet (EKS API, ECR, OS updates) via the NAT Gateway
+    # in the public subnet. They are never directly reachable from the internet.
+    privateNetworking: true
 
     # amiFamily determines the base OS for worker nodes
     # AmazonLinux2023 is required for Kubernetes 1.25+ (AL2 is EOL for 1.30+)

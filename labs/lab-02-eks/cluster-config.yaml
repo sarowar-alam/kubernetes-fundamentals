@@ -9,6 +9,7 @@
 #   EKS Control Plane : $0.10/hr  (billed even with 0 nodes)
 #   2x t3.medium nodes: ~$0.08/hr
 #   Total             : ~$0.18/hr → ~$0.36 per 2-hour session
+#   Note: uses existing devops-vpc — no new NAT/IGW charges from eksctl
 #
 # ALWAYS DELETE when done: eksctl delete cluster -f cluster-config.yaml
 # =============================================================================
@@ -57,6 +58,29 @@ iam:
   # Kubernetes Service Account. Pods using that SA get temporary AWS credentials
   # automatically — no secrets needed. This is called IRSA (IAM Roles for Service Accounts).
   withOIDC: true
+
+# ---------------------------------------------------------------------------
+# vpc: Use existing devops-vpc instead of creating a new one
+# Without this, eksctl creates a brand-new VPC — which fails when the AWS
+# account has reached the VPC/Internet Gateway limit (default: 5 per region).
+#
+# Subnets span 2 AZs (required by EKS for control plane high availability):
+#   ap-south-1a — public1 + private1
+#   ap-south-1b — public2 + private2
+# ---------------------------------------------------------------------------
+vpc:
+  id: "vpc-06f7dead5c49ece64"
+  subnets:
+    public:
+      ap-south-1a:
+        id: "subnet-0880772cfbeb8bb6f"  # devops-subnet-public1-ap-south-1a
+      ap-south-1b:
+        id: "subnet-0dd1f84bfb31ec9f9"  # devops-subnet-public2-ap-south-1b
+    private:
+      ap-south-1a:
+        id: "subnet-054147291dc0bf764"  # devops-subnet-private1-ap-south-1a
+      ap-south-1b:
+        id: "subnet-0c3d55d160afa0e5e"  # devops-subnet-private2-ap-south-1b
 
 # ---------------------------------------------------------------------------
 # addons: Kubernetes plugins managed by AWS

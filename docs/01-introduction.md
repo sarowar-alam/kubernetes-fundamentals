@@ -1,4 +1,4 @@
-# Session 1 — Introduction to Kubernetes & Container Orchestration
+# Introduction to Kubernetes & Container Orchestration
 
 ---
 
@@ -180,5 +180,5 @@ This module focuses on Kubernetes core. Future modules will layer in Helm, ArgoC
 - Kubernetes solves container management at scale
 - Docker Compose is for local dev; Kubernetes is for production
 - K8s is self-healing, auto-scaling, and zero-downtime capable
-- It's the industry standard — used by every major company
-- This module will take you from zero to running real clusters on AWS
+- It is the industry standard — used by every major company
+- The labs in this repository build real clusters on AWS from scratch

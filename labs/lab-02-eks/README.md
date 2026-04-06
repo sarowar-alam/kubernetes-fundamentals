@@ -72,7 +72,7 @@ cat labs/lab-02-eks/cluster-config.yaml
 ```yaml
 metadata:
   name: k8s-demo-eks   # Name visible in AWS Console
-  region: ap-south-1        # Mumbai — close to our audience
+  region: ap-south-1        # Mumbai region
   version: "1.29"           # Kubernetes version
 ```
 
@@ -266,7 +266,7 @@ kubectl cluster-info
 
 ## Step 8 — Delete the EKS Cluster
 
-**Always do this after the session.**
+Delete the cluster after use to avoid ongoing charges.
 
 ```bash
 eksctl delete cluster -f labs/lab-02-eks/cluster-config.yaml
@@ -296,7 +296,7 @@ Also verify in AWS Console:
 | Control plane | You manage | AWS manages |
 | etcd backup | You do it | AWS does it |
 | Master node patching | You do it | AWS does it |
-| Cost (per session) | ~$0.12 | ~$0.36 |
+| Cost (per run) | ~$0.12 | ~$0.36 |
 | Production-suitable | Needs more work | Yes |
 | Learning value | High (internals visible) | High (real-world) |
 

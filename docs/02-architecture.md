@@ -1,4 +1,4 @@
-# Session 2 — Kubernetes Architecture
+# Kubernetes Architecture
 
 ---
 
@@ -11,23 +11,23 @@ Every Kubernetes cluster has two types of machines:
 │                     KUBERNETES CLUSTER                      │
 │                                                             │
 │   ┌──────────────────────┐    ┌──────────────────────────┐  │
-│   │    MASTER NODE        │    │      WORKER NODE 1       │  │
-│   │  (Control Plane)     │    │   (Runs your apps)        │  │
-│   │                      │────│                           │  │
-│   │  API Server          │    │  kubelet                  │  │
-│   │  Scheduler           │    │  kube-proxy               │  │
-│   │  Controller Manager  │    │  Container Runtime        │  │
-│   │  etcd                │    │  [Pod] [Pod] [Pod]        │  │
+│   │    MASTER NODE       │    │      WORKER NODE 1       │  │
+│   │  (Control Plane)     │    │   (Runs your apps)       │  │
+│   │                      │────│                          │  │
+│   │  API Server          │    │  kubelet                 │  │
+│   │  Scheduler           │    │  kube-proxy              │  │
+│   │  Controller Manager  │    │  Container Runtime       │  │
+│   │  etcd                │    │  [Pod] [Pod] [Pod]       │  │
 │   └──────────────────────┘    └──────────────────────────┘  │
-│                                ┌──────────────────────────┐  │
-│                                │      WORKER NODE 2       │  │
-│                                │   (Runs your apps)        │  │
-│                                │                           │  │
-│                                │  kubelet                  │  │
-│                                │  kube-proxy               │  │
-│                                │  Container Runtime        │  │
-│                                │  [Pod] [Pod]              │  │
-│                                └──────────────────────────┘  │
+│                                ┌──────────────────────────┐ │
+│                                │      WORKER NODE 2       │ │
+│                                │   (Runs your apps)       │ │
+│                                │                          │ │
+│                                │  kubelet                 │ │
+│                                │  kube-proxy              │ │
+│                                │  Container Runtime       │ │
+│                                │  [Pod] [Pod]             │ │
+│                                └──────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -65,7 +65,7 @@ The front door of the entire cluster. Every operation goes through the API serve
    kubelet        →  API Server  →  etcd
 ```
 
-**Teaching marker:** [THEORY — explain verbally, draw the request flow on whiteboard]
+**Verification:** Run `kubectl get pods -v=8` to observe API calls in real time.
 
 **Key facts to remember:**
 - If the API server is down, `kubectl` stops working
@@ -93,8 +93,6 @@ Worker Node 3: 4 CPU available     → OK
 Scheduler checks "affinity", "taints", "topology" rules...
 Result: assign to Worker Node 2
 ```
-
-**Teaching marker:** [THEORY — explain the factors; no direct demo possible for internals]
 
 **Factors the scheduler considers:**
 - Available CPU and memory on each node
@@ -129,9 +127,11 @@ If desired ≠ actual → Controller takes action
 | **Service Account Controller** | Creates service accounts for new namespaces |
 | **Deployment Controller** | Manages rolling updates via ReplicaSets |
 
-**Teaching marker:** [THEORY — explain the thermostat analogy; demonstrate self-healing with ReplicaSet later]
-
-**Demo-able later:** When you delete a pod in a ReplicaSet, the Replication Controller (inside the Controller Manager) immediately creates a new one. Students can observe this.
+**Observable behaviour:** Delete a pod belonging to a ReplicaSet and watch the Controller Manager immediately create a replacement:
+```bash
+kubectl delete pod <replica-pod-name>
+kubectl get pods -w
+```
 
 ---
 
@@ -154,8 +154,6 @@ etcd is like a **Git repository for your cluster state**. Every time you create 
 If etcd is corrupted → entire cluster state is lost
 That's why in production: backup etcd daily, or use EKS (AWS manages it for you)
 ```
-
-**Teaching marker:** [THEORY — no direct demo; draw data flow diagram]
 
 **Critical security note:** etcd stores Kubernetes Secrets (API keys, database passwords). It must be encrypted at rest and never exposed to the internet.
 
@@ -185,7 +183,7 @@ kubelet:     Reports back to API server: "Pod is Running"
              Keeps checking: if pod dies, reports it
 ```
 
-**Teaching marker:** [THEORY + DEMO — after kubeadm setup, `systemctl status kubelet` and show logs on a worker node]
+**Verification:** After cluster setup, run `systemctl status kubelet` and `journalctl -u kubelet` on a worker node to observe the agent in operation.
 
 **Key facts:**
 - kubelet does NOT manage containers created outside Kubernetes (e.g., manually with `docker run`)
@@ -211,7 +209,7 @@ kube-proxy writes iptables rules on the node:
 When a request arrives at 10.96.0.1:80, the kernel routes it correctly
 ```
 
-**Teaching marker:** [THEORY — explain the role; can show `iptables -L -n -t nat` on a node to see actual rules]
+**Verification:** Run `iptables -L -n -t nat | grep KUBE` on any node to inspect the generated rules.
 
 **Key facts:**
 - Implements Kubernetes Services networking
@@ -238,27 +236,27 @@ The software that actually *runs* containers. Kubernetes is container-runtime-ag
 - `containerd` is what Docker itself uses under the hood
 - Lighter, faster, supports CRI natively
 
-**Teaching marker:** [THEORY + DEMO — `crictl ps` on worker node to list running containers; show `containerd` service status]
+**Verification:** Run `crictl ps` and `crictl images` on a worker node to list running containers managed by containerd.
 
 ---
 
-## Part 3: Theory vs Practical Summary
+## Part 3: Component Reference
 
-| Component | Explain Theoretically | Demo / Observe Practically |
+| Component | Conceptual Role | Verify / Observe |
 |---|---|---|
-| API Server | Request flow, port 6443, auth | `kubectl get pods -v=8` (watch API calls) |
-| Scheduler | Scheduling algorithm, node selection | Observe pod placement on nodes |
-| Controller Manager | Thermostat analogy, control loops | Delete a pod → watch it recreate |
-| etcd | State store, Raft, backup importance | `kubectl get secrets` → data lives in etcd |
-| kubelet | Agent, container lifecycle | `systemctl status kubelet`, `journalctl -u kubelet` |
-| kube-proxy | iptables rules, Service implementation | `iptables -L -n -t nat \| grep KUBE` |
-| Container Runtime | CRI, containerd | `crictl ps`, `crictl images` |
+| API Server | Request gateway, port 6443, auth hub | `kubectl get pods -v=8` (observe API calls) |
+| Scheduler | Node assignment for new pods | Observe pod placement across nodes |
+| Controller Manager | Reconciliation loops (desired vs actual state) | Delete a pod → watch it recreate |
+| etcd | State store for the entire cluster | `kubectl get secrets` → data lives in etcd |
+| kubelet | Per-node agent, container lifecycle | `systemctl status kubelet`, `journalctl -u kubelet` |
+| kube-proxy | iptables rules, Service traffic routing | `iptables -L -n -t nat \| grep KUBE` |
+| Container Runtime | Pulls images, runs containers | `crictl ps`, `crictl images` |
 
 ---
 
 ## Part 4: How a Pod Gets Scheduled (End-to-End Flow)
 
-This is one of the most important things to understand. Walk through this step by step.
+Trace the full lifecycle of a pod from `kubectl apply` to `Running`:
 
 ```
 Step 1: You run:
@@ -289,23 +287,23 @@ Step 6: kubelet reports back:
         - Pod status → "Running"
         - API Server writes this to etcd
 
-Step 7: You run kubectl get pods:
+Step 7: Run `kubectl get pods`:
         - API Server reads from etcd
         - Shows you: pod is Running on Worker Node 1
 ```
 
-**Teaching marker:** [THEORY + DRAW on whiteboard — trace this flow slowly, it's the "aha" moment for students]
+**Note:** `kubectl get pods -v=8` traces the exact HTTP request flow against the API server.
 
 ---
 
-## Part 5: Common Mistakes & Misconceptions
+## Part 5: Common Misconceptions
 
-1. **"The master node runs my app"** — No. The master node runs control plane components only. Your pods run on worker nodes. (In small dev clusters like minikube, master and worker are combined — but not in production.)
+1. **"The master node runs my app"** — The master node runs control plane components only. Workload pods run on worker nodes. (In single-node development setups like minikube, control plane and worker are combined — that is not the production topology.)
 
-2. **"etcd is just a database I can query directly"** — No. Never query etcd directly. Always use `kubectl` which goes through the API server.
+2. **"etcd is just a database I can query directly"** — Never access etcd directly. Use `kubectl`, which routes all reads and writes through the API server.
 
-3. **"If the master node crashes, my app stops"** — No. Your pods on worker nodes keep running. But you can't manage them (no `kubectl` commands work). That's why production clusters use 3 master nodes.
+3. **"If the master node crashes, my app stops"** — Pods on worker nodes continue running. Cluster management becomes unavailable until the control plane recovers. Production clusters run three master nodes for high availability.
 
-4. **"kube-proxy is a proxy like nginx"** — Not quite. It creates iptables rules at the kernel level. It's transparent to your application.
+4. **"kube-proxy is a proxy like nginx"** — kube-proxy writes iptables rules at the kernel level. It is transparent to applications; no traffic passes through a userspace process.
 
-5. **"Docker is required to use Kubernetes"** — No. Kubernetes uses `containerd` directly. Docker is not needed.
+5. **"Docker is required to use Kubernetes"** — Kubernetes uses `containerd` directly via the CRI. Docker is not a runtime dependency.

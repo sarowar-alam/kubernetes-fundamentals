@@ -3,17 +3,17 @@
 
 ---
 
-## Course Overview
+## Overview
 
-This module gives you a production-grade introduction to Kubernetes — from understanding what it is, to setting up real clusters on AWS, to deploying and managing applications with confidence.
+This repository provides a production-oriented introduction to Kubernetes — covering core architecture, cluster setup on AWS, workload management, and common operational patterns.
 
-By the end of this module you will:
-- Understand Kubernetes architecture and why it exists
-- Set up a self-managed cluster using **kubeadm** on AWS EC2
-- Set up a managed cluster using **AWS EKS**
-- Use `kubectl` to manage workloads
-- Deploy Pods, ReplicaSets, Deployments, Services, and Namespaces
-- Debug and troubleshoot common issues
+**Topics covered:**
+- Kubernetes architecture and core components
+- Self-managed cluster setup using **kubeadm** on AWS EC2
+- Managed cluster setup using **AWS EKS**
+- Workload management with `kubectl`
+- Pods, ReplicaSets, Deployments, Services, and Namespaces
+- Debugging and troubleshooting
 
 ---
 
@@ -28,12 +28,12 @@ By the end of this module you will:
 
 ---
 
-## Module Roadmap
+## Content Roadmap
 
-| Session | Topic | Type | Duration |
+| # | Topic | Type | Est. Time |
 |---|---|---|---|
-| 1 | Introduction to Kubernetes & Container Orchestration | Theory + Demo | 45 min |
-| 2 | Kubernetes Architecture (Master + Worker) | Theory + Diagrams | 60 min |
+| 1 | Introduction to Kubernetes & Container Orchestration | Reference + Demo | 45 min |
+| 2 | Kubernetes Architecture (Master + Worker) | Reference + Diagrams | 60 min |
 | 3 | **Lab 1:** Cluster with kubeadm on AWS | Hands-On | 90 min |
 | 4 | kubectl CLI + kubeconfig | Hands-On | 30 min |
 | 5 | Pods, ReplicaSets, Deployments | Hands-On | 60 min |
@@ -53,7 +53,7 @@ kubernetes-fundamentals/
 ├── docs/
 │   ├── 01-introduction.md             ← What is K8s, Why K8s, Compose vs K8s
 │   ├── 02-architecture.md             ← Control plane, worker nodes, all components
-│   └── instructor-notes.md            ← Teaching tips, analogies, common mistakes
+│   └── instructor-notes.md            ← Excluded from this repo (see .gitignore)
 │
 ├── scripts/
 │   ├── provision-cluster.sh           ← AWS CLI: create 3 EC2s + security groups
@@ -77,7 +77,7 @@ kubernetes-fundamentals/
 │   ├── 04-service/                    ← clusterip, nodeport, loadbalancer
 │   └── 05-namespace/                  ← namespace.yaml
 │
-└── kubectl-cheatsheet.md              ← All commands you need, copy-paste ready
+└── kubectl-cheatsheet.md              ← Reference: all common commands, copy-paste ready
 ```
 
 ---
@@ -94,15 +94,15 @@ kubernetes-fundamentals/
 
 ---
 
-## How to Use This Module
+## How to Use This Repository
 
-### Option A — Follow Along Live (Recommended)
-1. Instructor provisions the cluster using `scripts/provision-cluster.sh`
-2. Students SSH into the worker nodes
-3. Instructor walks through each `docs/` file and `labs/` folder in order
-4. Students apply manifests from `manifests/` directory
+### Option A — Guided Lab
+1. Provision the cluster: `scripts/provision-cluster.sh`
+2. SSH into each node and follow the lab guides in order
+3. Work through each `docs/` file and `labs/` folder sequentially
+4. Apply manifests from the `manifests/` directory
 
-### Option B — Self Study
+### Option B — Self-Guided
 1. Read `docs/01-introduction.md` → `docs/02-architecture.md`
 2. Follow `labs/lab-01-kubeadm/README.md` end-to-end
 3. Apply each manifest, verify, then break and fix it
@@ -117,6 +117,6 @@ kubernetes-fundamentals/
 | 3x t3.medium EC2 | ~$0.0416/hr each | 3 hrs | ~$0.37 |
 | EKS Cluster | $0.10/hr | 1 hr | $0.10 |
 | EKS 2x t3.medium Nodes | ~$0.0416/hr each | 1 hr | ~$0.08 |
-| **Total per session** | | | **~$0.55** |
+| **Total per run** | | | **~$0.55** |
 
-> Always run `scripts/teardown-cluster.sh` after each session to avoid charges.
+> Run `scripts/teardown-cluster.sh` after each use to avoid ongoing charges.

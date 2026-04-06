@@ -6,7 +6,7 @@
 
 ---
 
-## What You Will Do
+## Steps Overview
 
 ```
 STEP 0 → SSH into the fresh master server
@@ -118,7 +118,7 @@ curl --version | head -1
 Kubernetes **requires** swap to be off. It relies on accurate memory reporting — swap breaks this.
 
 ```bash
-# Turn off swap immediately (this session)
+# Disable swap immediately (required by Kubernetes)
 sudo swapoff -a
 
 # Disable permanently (survives reboot) by commenting out swap in fstab
@@ -409,7 +409,7 @@ kubeadm join 10.0.1.12:6443 --token abcdef.1234567890abcdef \
         --discovery-token-ca-cert-hash sha256:abc123def456...
 ```
 
-Share this with students. They will use it in `worker-join-guide.md`.
+Save this for future use as `worker-join-guide.md`.
 
 ---
 

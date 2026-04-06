@@ -18,7 +18,7 @@ AWS ap-south-1 (Mumbai)
         └── k8s-worker-2 (t3.medium) ← your apps run here
 ```
 
-At the end of this lab you will have:
+At the end of this lab, the cluster will have:
 - A fully functional Kubernetes 1.29 cluster
 - Calico CNI for pod networking
 - `kubectl` configured to manage the cluster
@@ -252,7 +252,7 @@ k8s-worker-1   Ready    <none>          2m    v1.29.0
 k8s-worker-2   Ready    <none>          1m    v1.29.0
 ```
 
-**Congratulations — your cluster is up!**
+The cluster is operational.
 
 ---
 

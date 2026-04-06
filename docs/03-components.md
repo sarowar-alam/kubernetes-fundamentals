@@ -7,41 +7,50 @@ How a `kubectl apply` becomes a running container: a complete walkthrough of eve
 ## Component Map
 
 ```
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │                          CONTROL PLANE                                  │
-  │                                                                         │
-  │   ┌──────────────┐     ┌──────────┐     ┌──────────────────────────┐   │
-  │   │   kubectl    │────▶│  kube-   │────▶│          etcd            │   │
-  │   │  (client)    │     │apiserver │◀────│  (distributed key-value  │   │
-  │   └──────────────┘     │  :6443   │     │   store — source of      │   │
-  │                        └────┬─────┘     │   truth for all state)   │   │
-  │                             │           └──────────────────────────┘   │
-  │                    ┌────────┴────────┐                                  │
-  │                    │                 │                                  │
-  │             ┌──────▼──────┐  ┌───────▼──────────────┐                  │
-  │             │   kube-     │  │   kube-controller-   │                  │
-  │             │  scheduler  │  │      manager         │                  │
-  │             └─────────────┘  │  (Deployment ctrl)   │                  │
-  │                              │  (ReplicaSet ctrl)   │                  │
-  │                              │  (Node ctrl)         │                  │
-  │                              │  (Endpoint ctrl)     │                  │
-  │                              └──────────────────────┘                  │
-  └─────────────────────────────────────────────────────────────────────────┘
-              │                           │
-              │ watch loop                │ watch loop
-              ▼                           ▼
-  ┌─────────────────────────┐   ┌─────────────────────────┐
-  │      WORKER NODE 1      │   │      WORKER NODE 2      │
-  │                         │   │                         │
-  │  kubelet                │   │  kubelet                │
-  │    └─▶ containerd (CRI) │   │    └─▶ containerd (CRI) │
-  │          └─▶ [Pod]      │   │          └─▶ [Pod]      │
-  │               [Pod]     │   │               [Pod]     │
-  │  kube-proxy             │   │  kube-proxy             │
-  │    └─▶ iptables rules   │   │    └─▶ iptables rules   │
-  │  CNI plugin             │   │  CNI plugin             │
-  │    └─▶ Pod network      │   │    └─▶ Pod network      │
-  └─────────────────────────┘   └─────────────────────────┘
+  ┌──────────────────────────────────────────────────────────────────────────────────┐
+  │                              CONTROL PLANE                                      │
+  │                                                                                  │
+  │  ┌──────────────┐    ┌─────────────────┐    ┌──────────────────────────────┐   │
+  │  │   kubectl    │───▶│  kube-apiserver │───▶│           etcd               │   │
+  │  │  (client)    │    │    :6443 TLS    │◀───│  (key-value store :2379)     │   │
+  │  └──────────────┘    └───────┬─────────┘    │  source of truth for all     │   │
+  │                              │              │  cluster state               │   │
+  │           ┌──────────────────┼──────────────└──────────────────────────────┘   │
+  │           │                  │                          │                       │
+  │    ┌──────▼──────┐  ┌────────▼────────────┐  ┌─────────▼────────────────────┐  │
+  │    │   kube-     │  │  kube-controller-   │  │  cloud-controller-manager    │  │
+  │    │  scheduler  │  │      manager        │  │  (EKS only)                  │  │
+  │    │             │  │  ┌ Deployment ctrl  │  │  • provisions AWS NLB        │  │
+  │    │ Filter →    │  │  ├ ReplicaSet ctrl  │  │  • attaches EBS volumes      │  │
+  │    │ Score  →    │  │  ├ Node ctrl        │  │  • manages Route53 DNS       │  │
+  │    │ Bind        │  │  ├ Endpoint ctrl    │  └──────────────────────────────┘  │
+  │    └─────────────┘  │  └ Namespace ctrl   │                                    │
+  │                     └─────────────────────┘                                    │
+  └──────────────────────────────────────────────────────────────────────────────────┘
+              │ watch loop (HTTPS :6443)         │ watch loop
+              ▼                                  ▼
+  ┌──────────────────────────┐      ┌──────────────────────────┐
+  │      WORKER NODE 1       │      │      WORKER NODE 2       │
+  │                          │      │                          │
+  │  kubelet                 │      │  kubelet                 │
+  │    └─▶ containerd (CRI)  │      │    └─▶ containerd (CRI)  │
+  │          └─▶ [Pod A]     │      │          └─▶ [Pod C]     │
+  │               [Pod B]    │      │               [Pod D]    │
+  │  kube-proxy              │      │  kube-proxy              │
+  │    └─▶ iptables rules    │      │    └─▶ iptables rules    │
+  │  CNI plugin              │      │  CNI plugin              │
+  │    └─▶ veth + Pod IP     │      │    └─▶ veth + Pod IP     │
+  └──────────┬───────────────┘      └──────────┬───────────────┘
+             │  NETWORKING LAYER                │
+             │  Calico: VXLAN (UDP 4789)        │
+             │  EKS:    VPC native routing      │
+             └──────────────────────────────────┘
+
+  STORAGE (EKS — right side of diagram)
+  ┌──────────────────────────────────────────────────────────────┐
+  │  PersistentVolumeClaim → PersistentVolume                    │
+  │       → aws-ebs-csi-driver → AWS EBS (gp3)                  │
+  └──────────────────────────────────────────────────────────────┘
 ```
 
 **CNI plugin:**
@@ -50,37 +59,56 @@ How a `kubectl apply` becomes a running container: a complete walkthrough of eve
 
 ---
 
-## The 10-Step Flow: `kubectl apply` to Running Pod
+## The 12-Step Flow: `kubectl apply` to Running Pod
 
 ```
-  1. kubectl apply -f deployment.yaml
-           │
-           ▼
-  2. kube-apiserver — TLS handshake, RBAC check, schema validation
-           │
-           ▼
-  3. etcd — Deployment object written (status: desired=3, ready=0)
-           │
-           ▼
-  4. Deployment Controller watches etcd — detects mismatch
-           │
-           ▼
-  5. Deployment Controller creates ReplicaSet object
-           │
-           ▼
-  6. ReplicaSet Controller creates 3 Pod objects (status: Pending, nodeName: "")
-           │
-           ▼
-  7. kube-scheduler watches for Pending pods — scores nodes, assigns nodeName
-           │
-           ▼
-  8. kubelet on assigned node detects Pod via watch loop
-           │
-           ▼
-  9. kubelet → containerd: pull image, create container, start container
-           │
-           ▼
-  10. CNI assigns Pod IP, kube-proxy updates iptables — Pod status: Running
+  ① kubectl apply -f deployment.yaml
+          │  (YAML sent as HTTPS POST to kube-apiserver :6443)
+          ▼
+  ② kube-apiserver
+          │  AuthN: who are you? (TLS client cert / token / OIDC)
+          │  AuthZ: are you allowed? (RBAC role check)
+          │  Admission: is the object valid? (schema + webhooks)
+          ▼
+  ③ etcd  — Deployment object written
+          │  (desired: replicas=3, actual: 0)
+          ▼
+  ④ Deployment Controller (watch event fires)
+          │  detects: desired(3) ≠ actual(0)
+          ▼
+  ⑤ Deployment Controller creates ReplicaSet object → etcd
+          │
+          ▼
+  ⑥ ReplicaSet Controller (watch event fires)
+          │  creates 3 Pod objects in etcd
+          │  Pod status: Pending, nodeName: ""
+          ▼
+  ⑦ kube-scheduler (watch event fires — unscheduled Pod detected)
+          │  Phase 1 Filter: eliminate nodes without enough CPU/RAM
+          │  Phase 2 Score:  rank remaining nodes (0–100)
+          │  Phase 3 Bind:   write nodeName into Pod spec → etcd
+          ▼
+  ⑧ kubelet on assigned node (watch event fires)
+          │  detects Pod spec now has nodeName = this node
+          ▼
+  ⑨ kubelet → containerd (CRI gRPC call)
+          │  pull image from registry (HTTPS :443)
+          │  create Linux namespaces + cgroups via runc
+          │  start container
+          ▼
+  ⑩ CNI plugin (called by kubelet post-container-create)
+          │  assigns Pod IP from pod CIDR
+          │  creates veth pair (one end in Pod, one end on host)
+          │  sets up routing rules on the node
+          ▼
+  ⑪ kube-proxy (watch event fires — new Endpoints entry)
+          │  updates iptables DNAT rules on every node
+          │  new Pod IP added to Service backend pool
+          ▼
+  ⑫ Pod status → Running
+          │  kubelet reports status back to kube-apiserver
+          │  kube-apiserver persists updated status to etcd
+          │  kubectl get pods shows: 1/1 Running
 ```
 
 Each step is expanded in detail in the sections below.
@@ -580,6 +608,84 @@ kubectl get endpoints static-site-nodeport -w
   └──────────────────────────────────────────────────────────────────┘
 ```
 
+### 3.3 — Pod-to-Pod Communication
+
+The fundamental Kubernetes networking contract: **every Pod can reach every other Pod directly by IP, without NAT, regardless of which node they sit on.** The CNI plugin is responsible for making this true.
+
+#### Calico — VXLAN overlay (kubeadm, lab-01)
+
+```
+  Pod A (192.168.1.2) on Node 1 (10.0.1.10)
+  wants to reach
+  Pod B (192.168.2.3) on Node 2 (10.0.2.15)
+
+  Packet journey:
+
+  Pod A
+    │  src: 192.168.1.2  dst: 192.168.2.3
+    ▼
+  veth0 (Pod-side virtual ethernet)
+    │
+    ▼
+  cali1234 (host-side veth, Node 1)
+    │
+    ▼
+  Node 1 routing table
+    │  192.168.2.0/24 via VXLAN tunnel
+    ▼
+  VXLAN encapsulation (UDP port 4789)
+    │  outer: src 10.0.1.10  dst 10.0.2.15
+    │  inner: src 192.168.1.2 dst 192.168.2.3
+    ▼
+  AWS network carries UDP packet (normal EC2 routing)
+    │
+    ▼
+  VXLAN decapsulation on Node 2
+    │
+    ▼
+  cali5678 (host-side veth, Node 2)
+    │
+    ▼
+  Pod B (192.168.2.3) ✔ receives original packet
+```
+
+The EC2 security group must allow **UDP 4789** between nodes for VXLAN to work. This is configured by `provision-ec2.sh` and documented in `labs/lab-01-kubeadm/README.md`.
+
+#### aws-vpc-cni — VPC native routing (EKS, lab-02)
+
+```
+  Pod A (192.168.143.12) on Node 1 (192.168.143.5)
+  wants to reach
+  Pod B (192.168.144.8) on Node 2 (192.168.144.3)
+
+  Packet journey:
+
+  Pod A
+    │  src: 192.168.143.12  dst: 192.168.144.8
+    ▼
+  veth pair to host network namespace
+    │
+    ▼
+  Node 1 ENI (secondary IP 192.168.143.12 is registered on this ENI)
+    │
+    ▼
+  AWS VPC router (knows all ENI secondary IPs, no encapsulation needed)
+    │
+    ▼
+  Node 2 ENI (192.168.144.8 is a secondary IP on this node's ENI)
+    │
+    ▼
+  Pod B (192.168.144.8) ✔ receives original packet
+```
+
+No tunneling, no overhead. The VPC fabric handles routing natively. This is why EKS pods get real VPC IP addresses — the AWS network already knows about them via ENI secondary IP registration.
+
+**Same-node Pod-to-Pod** (both CNIs):
+```
+  Pod A → veth → host bridge/routing → veth → Pod B
+  (never leaves the node, no tunneling needed)
+```
+
 ---
 
 ## Part 4 — Configuration Objects
@@ -627,9 +733,95 @@ Functionally identical to ConfigMap, but the values are base64-encoded and acces
 
 ---
 
-## Part 5 — Resource Management
+## Part 5 — Storage
 
-### 5.1 — Requests and Limits
+### 5.1 — PersistentVolume, PersistentVolumeClaim, StorageClass
+
+Kubernetes separates *what storage is needed* (PersistentVolumeClaim) from *what storage exists* (PersistentVolume). A StorageClass bridges them by defining how storage is dynamically provisioned.
+
+```
+  Developer writes:
+  ┌───────────────────────────┐
+  │ PersistentVolumeClaim     │
+  │ name: my-data             │
+  │ storageClassName: gp3    │
+  │ accessMode: ReadWriteOnce│
+  │ storage: 20Gi             │
+  └──────────────┬────────────┘
+                   │
+                   ▼  kube-controller-manager (PV controller) sees the claim
+  ┌──────────────┬────────────┐
+  │ StorageClass: gp3         │
+  │ provisioner:              │
+  │   ebs.csi.aws.com         │
+  └──────────────┬────────────┘
+                   │
+                   ▼  StorageClass names the CSI driver
+  ┌──────────────┬────────────┐
+  │ aws-ebs-csi-driver        │
+  │ (runs as DaemonSet on     │
+  │  every EKS worker node)   │
+  └──────────────┬────────────┘
+                   │
+                   ▼  calls AWS API
+  ┌──────────────┬────────────┐
+  │ AWS EBS Volume (gp3)      │
+  │ 20 GiB, encrypted         │
+  │ us-east-1a (same AZ as   │
+  │ the scheduled Pod)        │
+  └──────────────┬────────────┘
+                   │
+                   ▼  volume mounted into Pod by kubelet
+  ┌───────────────────────────┐
+  │ Pod mounts /data          │
+  │ reads/writes persist      │
+  │ across Pod restarts       │
+  └───────────────────────────┘
+```
+
+### 5.2 — aws-ebs-csi-driver
+
+The **Container Storage Interface (CSI)** driver is the standard plugin interface between Kubernetes and external storage systems. The `aws-ebs-csi-driver` is the official AWS implementation.
+
+**How it is installed in this repo:**
+`labs/lab-02-eks/cluster-config.yaml` installs it as a managed EKS addon:
+
+```yaml
+addons:
+  - name: aws-ebs-csi-driver
+    version: latest
+```
+
+This deploys the driver as a DaemonSet (node plugin) + Deployment (controller) in the `kube-system` namespace.
+
+```bash
+# Verify the driver is running (EKS)
+kubectl get pods -n kube-system | grep ebs-csi
+
+# See available storage classes
+kubectl get storageclass
+# gp2 and gp3 will be listed; gp3 is the modern choice (20% cheaper, better IOPS)
+```
+
+### 5.3 — Volume Types in This Repo
+
+| Volume type | Used in | Backed by | Persists across Pod restarts? |
+|---|---|---|---|
+| `configMap` | `06-static-site/deployment.yaml` | etcd (tmpfs on node) | Yes (re-mounted from etcd) |
+| `emptyDir` | (not used, for reference) | Node disk or RAM | No — deleted when Pod is removed |
+| `persistentVolumeClaim` | (future labs) | AWS EBS gp3 via CSI | Yes — survives Pod deletion |
+
+### 5.4 — AZ Constraint
+
+EBS volumes are **AZ-scoped** — a volume created in `ap-south-1a` can only be attached to a node in `ap-south-1a`. The kube-scheduler accounts for this automatically via the `volume.kubernetes.io/selected-node` annotation — it places the Pod on a node in the same AZ as the PVC's volume.
+
+This is why the EKS cluster config uses **three AZs** (`1a`, `1b`, `1c`) — so storage and compute placement flexibility is maximised.
+
+---
+
+## Part 6 — Resource Management
+
+### 6.1 — Requests and Limits
 
 Every manifest in this repo specifies `resources.requests` and `resources.limits`. Here is exactly how each affects the system:
 
@@ -662,7 +854,7 @@ All manifests in this repo are `Burstable` (requests < limits). Never run `BestE
 
 ---
 
-## Part 6 — Full Component Interaction Reference
+## Part 7 — Full Component Interaction Reference
 
 ```
 COMPONENT             TALKS TO               PROTOCOL      PORT

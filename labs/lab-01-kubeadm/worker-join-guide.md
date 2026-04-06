@@ -83,17 +83,32 @@ This section prepares a **fresh Ubuntu 22.04** server to run Kubernetes. All sub
 ### STEP 2.1 — Update and Upgrade the System
 
 ```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl apt-transport-https ca-certificates gnupg lsb-release
+sudo apt-get update -y
+sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release wget git netcat-openbsd
 ```
 
-**Why:** Ensures you have the latest security patches and the tools needed to add external package repositories.
+**Why each package:**
+
+| Package | Purpose |
+|---|---|
+| `apt-transport-https` | Allows `apt` to fetch packages over HTTPS (required for the Kubernetes and Docker repos) |
+| `ca-certificates` | Trusts HTTPS certificates from those repos |
+| `curl` | Downloads GPG keys and install scripts |
+| `gnupg` | Verifies GPG signatures on repo keys |
+| `lsb-release` | Identifies the Ubuntu version — used in the apt source string |
+| `wget` | Alternative downloader used by some tooling |
+| `git` | Clones this repository on the server |
+| `netcat-openbsd` | Used by the `nc -zw5` connectivity check to verify the worker can reach the master API server on port 6443 before attempting `kubeadm join` |
+
+`DEBIAN_FRONTEND=noninteractive` suppresses interactive prompts (e.g. service restart dialogs) so the upgrade never blocks the script.
 
 ### ✅ Verify 2.1
 ```bash
-apt --version
 curl --version | head -1
-# Both commands should run without error
+# Expected: curl 7.x.x or 8.x.x
+nc -h 2>&1 | head -1
+# Expected: OpenBSD netcat ...
 ```
 
 ---
@@ -108,8 +123,10 @@ sudo swapoff -a
 
 Make it permanent (survives reboots):
 ```bash
-sudo sed -i '/\bswap\b/d' /etc/fstab
+sudo sed -i '/\bswap\b/s/^/#/' /etc/fstab
 ```
+
+> This comments the swap line out with `#` rather than deleting it, which is the safer approach — the original entry is preserved and easy to reverse.
 
 ### ✅ Verify 2.2
 ```bash
@@ -154,7 +171,13 @@ lsmod | grep -E "overlay|br_netfilter"
 
 ### STEP 2.4 — Apply sysctl Network Settings
 
-These kernel parameters allow Kubernetes to forward network traffic through iptables:
+These three kernel parameters are required for Kubernetes networking to function correctly:
+
+| Parameter | Why it is required |
+|---|---|
+| `net.bridge.bridge-nf-call-iptables = 1` | Makes iptables see traffic crossing Linux bridges. Without this, kube-proxy rules are bypassed and pod-to-service routing breaks. |
+| `net.bridge.bridge-nf-call-ip6tables = 1` | Same as above for IPv6 traffic — required even on IPv4-only clusters because some CNI plugins use IPv6 internally. |
+| `net.ipv4.ip_forward = 1` | Allows the kernel to forward packets between network interfaces. Without this, pods on different nodes cannot route to each other. |
 
 ```bash
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
@@ -180,9 +203,26 @@ sysctl net.bridge.bridge-nf-call-iptables net.ipv4.ip_forward
 
 containerd is the **container runtime** — it pulls images and runs containers. Kubernetes uses it via the CRI (Container Runtime Interface).
 
-**Install:**
+**Add Docker’s apt repository and install `containerd.io`:**
+
+> `containerd.io` is Docker’s distribution of containerd. It is more up-to-date than the `containerd` package in Ubuntu’s default repos and is the version used in production clusters.
+
 ```bash
-sudo apt install -y containerd
+# Add Docker's GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Add Docker repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update -y
+sudo apt-get install -y containerd.io
 ```
 
 **Generate the default config:**
@@ -232,9 +272,12 @@ echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
   https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
-sudo apt update
-sudo apt install -y kubelet kubeadm kubectl
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
+
+# Enable kubelet so it starts automatically when kubeadm join runs
+sudo systemctl enable kubelet
 ```
 
 `apt-mark hold` prevents accidental upgrades that could break cluster compatibility.
@@ -322,21 +365,54 @@ You need three values from this output:
 
 ## STEP 4 — Join the Cluster
 
-### Option A: Use the script (recommended)
+### 4.1 Verify connectivity to the master (pre-check)
+
+Before running `kubeadm join`, confirm the worker can reach the master’s API server on port 6443. This is the port `kubeadm join` connects to.
+
+```bash
+nc -zw5 <MASTER_IP> 6443
+# Expected: (exits with code 0, no error)
+```
+
+If this fails, the join will also fail. Fix the security group inbound rule on the master’s SG: add TCP port 6443 from the worker’s subnet CIDR.
+
+### 4.2 Check if this node was previously joined
+
+If `/etc/kubernetes/kubelet.conf` already exists, this node has already joined a cluster. Running `kubeadm join` again will fail.
+
+```bash
+ls /etc/kubernetes/kubelet.conf
+# If this file exists, reset first:
+sudo kubeadm reset -f
+```
+
+Only run the reset if you intend to re-join (e.g. joining a different cluster or recovering from a failed attempt).
+
+### 4.3 Run the join
+
+**Option A — Use the script (recommended)**
 
 ```bash
 cd ~/kubernetes-fundamentals/labs/lab-01-kubeadm
 sudo ./worker-join.sh
 ```
 
-The script will prompt:
+The script will prompt for the three values interactively:
 ```
-Enter MASTER_IP (private IP of master node): 10.0.1.12
-Enter JOIN_TOKEN: abcdef.1234567890abcdef
-Enter JOIN_HASH (sha256:...): sha256:abc123def456...
+  Master Private IP   (e.g. 10.0.1.12)             : 10.0.1.12
+  Join Token          (e.g. abcdef.1234567890abcdef): abcdef.1234567890abcdef
+  Discovery CA Hash   (e.g. sha256:abc123...)       : sha256:abc123...
 ```
 
-### Option B: Manual kubeadm join
+Alternatively, pass values as environment variables (non-interactive, useful for automation):
+```bash
+sudo MASTER_IP=10.0.1.12 \
+     JOIN_TOKEN=abcdef.1234567890abcdef \
+     JOIN_HASH=sha256:abc123def456... \
+     ./worker-join.sh
+```
+
+**Option B — Manual `kubeadm join`**
 
 ```bash
 sudo kubeadm join <MASTER_IP>:6443 \

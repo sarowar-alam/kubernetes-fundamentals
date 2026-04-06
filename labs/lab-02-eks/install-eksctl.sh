@@ -165,6 +165,7 @@ fi
 if [[ "${AWSCLI_OK}" == "false" ]]; then
   echo "[INFO] Installing AWS CLI v2 for ${OS_NAME}/${ARCH_NAME}..."
   if [[ "${OS_NAME}" == "linux" ]]; then
+    command -v unzip &>/dev/null || { echo "[INFO] Installing unzip..."; apt-get install -y -qq unzip; }
     AWSCLI_URL="https://awscli.amazonaws.com/awscli-exe-linux-${ARCH_NAME/amd64/x86_64}.zip"
     curl -fsSL -o /tmp/awscliv2.zip "${AWSCLI_URL}"
     unzip -q /tmp/awscliv2.zip -d /tmp

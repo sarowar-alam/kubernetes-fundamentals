@@ -413,7 +413,8 @@ A self-contained static website served by `nginx:alpine`, delivered to the brows
 |---|---|---|
 | `configmap.yaml` | ConfigMap | `static-site-html` |
 | `deployment.yaml` | Deployment | `static-site` (2 replicas) |
-| `service-nodeport.yaml` | Service/NodePort | `static-site-nodeport` |
+| `service-nodeport.yaml` | Service/NodePort | `static-site-nodeport` (port 30090) |
+| `service-loadbalancer.yaml` | Service/LoadBalancer | `static-site-lb` (EKS only) |
 
 ### Apply
 
@@ -446,7 +447,7 @@ static-site-7d9b5c6f8-xyz99   1/1     Running   0          30s
 
 ### Access the site
 
-**kubeadm (lab-01-kubeadm)**
+**kubeadm (lab-01-kubeadm) — NodePort**
 
 ```bash
 # Get a node's external IP
@@ -458,17 +459,32 @@ curl http://<node-public-ip>:30090
 
 > Ensure the EC2 security group for your kubeadm nodes allows **inbound TCP 30090** from your IP. Add a custom inbound rule in the AWS console (EC2 → Security Groups → Inbound rules → Add rule: Custom TCP, Port 30090, Source: My IP).
 
-**EKS (lab-02-eks)**
+**EKS (lab-02-eks) — LoadBalancer (recommended)**
+
+EKS worker nodes are in private subnets and have no public IP. Use the LoadBalancer service to get a public AWS NLB endpoint:
 
 ```bash
-# Get a worker node external IP
-kubectl get nodes -o wide   # EXTERNAL-IP column
+# Apply the LoadBalancer service
+kubectl apply -f manifests/06-static-site/service-loadbalancer.yaml
 
-# Open in browser or curl
-curl http://<worker-node-external-ip>:30090
+# Watch until EXTERNAL-IP is populated (~60-90 seconds)
+kubectl get svc static-site-lb -w
+
+# Once EXTERNAL-IP shows a DNS name:
+curl http://<EXTERNAL-IP>
 ```
 
-> On EKS, worker nodes sit in a VPC. Allow **inbound TCP 30090** on the worker node security group: EC2 → Security Groups → find the node group SG (name contains `eks-node-group`) → Inbound rules → Add rule: Custom TCP, Port 30090, Source: My IP.
+Cleanup (also deletes the NLB):
+```bash
+kubectl delete -f manifests/06-static-site/service-loadbalancer.yaml
+```
+
+**EKS — alternative: port-forward (no AWS changes needed)**
+
+```bash
+kubectl port-forward svc/static-site-nodeport 8080:80
+# Open http://localhost:8080 in your browser
+```
 
 ### Update the site in-place
 

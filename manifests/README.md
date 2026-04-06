@@ -19,11 +19,16 @@ manifests/
 │   ├── service-clusterip.yaml  # Internal-only service
 │   ├── service-nodeport.yaml   # External access via node port
 │   └── service-loadbalancer.yaml # AWS NLB (EKS only)
-└── 05-namespace/
-    └── namespace.yaml          # dev + staging namespace isolation
+├── 05-namespace/
+│   └── namespace.yaml          # dev + staging namespace isolation
+└── 06-static-site/
+    ├── configmap.yaml          # HTML page stored as ConfigMap
+    ├── deployment.yaml         # 2-replica nginx:alpine deployment
+    ├── service-nodeport.yaml   # NodePort 30090 (kubeadm + EKS)
+    └── service-loadbalancer.yaml # AWS NLB public endpoint (EKS only)
 ```
 
-**Recommended apply order:** 01 → 02 → 03 → 04 → 05. Each section builds on the previous.
+**Recommended apply order:** 01 → 02 → 03 → 04 → 05 → 06. Each section builds on the previous.
 
 ---
 
@@ -423,9 +428,11 @@ Apply in order (ConfigMap must exist before the Deployment mounts it):
 ```bash
 kubectl apply -f manifests/06-static-site/configmap.yaml
 kubectl apply -f manifests/06-static-site/deployment.yaml
-kubectl apply -f manifests//06-static-site/service-nodeport.yaml
+kubectl apply -f manifests/06-static-site/service-nodeport.yaml
+# EKS only:
+kubectl apply -f manifests/06-static-site/service-loadbalancer.yaml
 
-# Or apply the entire folder (kubectl handles ordering automatically)
+# Or apply the entire folder at once
 kubectl apply -f manifests/06-static-site/
 ```
 

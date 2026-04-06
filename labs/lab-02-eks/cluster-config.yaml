@@ -130,7 +130,7 @@ managedNodeGroups:
     ssh:
       allow: true
       # Name of an existing EC2 Key Pair in ap-south-1
-      publicKeyName: k8s-lab-key
+      publicKeyName: sarowar-ostad-mumbai
 
     # Labels are key-value metadata attached to every node in this group
     # Used by nodeSelectors to pin specific pods to specific nodes
@@ -153,3 +153,6 @@ managedNodeGroups:
         ebs: true
         # cloudWatch: allows nodes to send logs to CloudWatch
         cloudWatch: true
+        # ssm: attaches AmazonSSMManagedInstanceCore — enables SSM Session Manager
+        # access to worker nodes without needing open SSH ports (matches SSM instance profile)
+        ssm: true

@@ -44,6 +44,11 @@ metadata:
     Module: kubernetes-fundamentals
     ManagedBy: eksctl
 
+# Explicitly disable Auto Mode to keep managed node groups and addons
+# (Auto Mode will become the default in a future eksctl release)
+autoModeConfig:
+  enabled: false
+
 # ---------------------------------------------------------------------------
 # iam: Identity and Access Management configuration
 # ---------------------------------------------------------------------------
@@ -134,15 +139,28 @@ managedNodeGroups:
     # Maximum number of nodes (Auto Scaling Group upper bound)
     # During traffic spikes, Kubernetes can scale up to this many nodes
     # Cost control: cap this to avoid surprise bills
-    maxSize: 3
+    maxSize: 2
 
     # Desired number of nodes at cluster creation
     # Can be adjusted later: eksctl scale nodegroup --nodes=X
-    desiredCapacity: 2
+    desiredCapacity: 1
 
     # EBS volume size per node (in GB)
     # Used for container images, container logs, and node OS
     volumeSize: 20
+
+    # gp3 is faster and cheaper than gp2 — no throughput limit at base tier
+    volumeType: gp3
+
+    # ebsOptimized dedicates bandwidth between the instance and EBS
+    # Eliminates I/O contention when running disk-heavy workloads
+    ebsOptimized: true
+
+    # Place nodes in public subnets so they can reach the EKS API and ECR
+    # without a NAT gateway. devops-vpc has no NAT, so private subnet nodes
+    # cannot register with the cluster or pull container images.
+    # In production (with NAT): set this to true for node isolation.
+    privateNetworking: false
 
     # amiFamily determines the base OS for worker nodes
     # AmazonLinux2023 is required for Kubernetes 1.25+ (AL2 is EOL for 1.30+)

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
 # install-eksctl.sh
-# Downloads and installs the latest eksctl binary on Linux/macOS/Windows.
+# Downloads and installs eksctl AND kubectl on Linux/macOS/Windows.
 #
 # eksctl is the official CLI for creating EKS clusters.
-# It reads a cluster config YAML and handles everything:
+# kubectl is the Kubernetes CLI for managing cluster workloads.
+#
+# eksctl reads a cluster config YAML and handles everything:
 #   - VPC, subnets, security groups
 #   - IAM roles
 #   - EKS control plane
@@ -22,17 +24,27 @@
 set -euo pipefail
 
 echo "=================================================="
-echo "  Installing eksctl"
+echo "  Installing eksctl + kubectl"
 echo "=================================================="
 
 # ---------------------------------------------------------------------------
-# Early-exit guard: skip install if eksctl is already present
+# Early-exit guard: skip install if both tools are already present
 # ---------------------------------------------------------------------------
+EKSCTL_OK=false
+KUBECTL_OK=false
 if command -v eksctl &>/dev/null; then
   echo "[OK] eksctl is already installed: $(eksctl version)"
+  EKSCTL_OK=true
+fi
+if command -v kubectl &>/dev/null; then
+  echo "[OK] kubectl is already installed: $(kubectl version --client --short 2>/dev/null || kubectl version --client 2>/dev/null | head -1)"
+  KUBECTL_OK=true
+fi
+if [[ "${EKSCTL_OK}" == "true" && "${KUBECTL_OK}" == "true" ]]; then
   echo ""
-  echo "  To upgrade on Linux/macOS : sudo eksctl upgrade"
-  echo "  To upgrade on Windows     : choco upgrade eksctl -y"
+  echo "  Both tools are installed. Nothing to do."
+  echo "  To upgrade on Linux/macOS : sudo eksctl upgrade  |  sudo kubectl ..."
+  echo "  To upgrade on Windows     : choco upgrade eksctl kubernetes-cli -y"
   echo ""
   exit 0
 fi
@@ -94,21 +106,21 @@ if [[ "${OS_NAME}" == "windows" ]]; then
     exit 1
   fi
 
-  "${CHOCO_PATH}" install eksctl -y
+  [[ "${EKSCTL_OK}" == "false" ]] && "${CHOCO_PATH}" install eksctl -y
+  [[ "${KUBECTL_OK}" == "false" ]] && "${CHOCO_PATH}" install kubernetes-cli -y
 
   echo ""
-  echo "[OK] eksctl installed successfully."
+  echo "[OK] eksctl + kubectl installed successfully."
   echo ""
   echo "  IMPORTANT: Open a new Git Bash window so the updated PATH takes effect,"
-  echo "  then verify with: eksctl version"
+  echo "  then verify with:  eksctl version  &&  kubectl version --client"
   echo ""
   echo "=================================================="
-  echo "  EKSCTL READY"
+  echo "  TOOLS READY"
   echo "=================================================="
   echo ""
   echo "  Also ensure these are installed and configured:"
   echo "    - AWS CLI v2   : aws --version"
-  echo "    - kubectl      : kubectl version --client"
   echo "    - AWS profile  : aws configure --profile sarowar-ostad"
   echo ""
   echo "  Next step: create EKS cluster:"
@@ -118,28 +130,38 @@ if [[ "${OS_NAME}" == "windows" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Linux / macOS — download binary from GitHub Releases
+# Linux / macOS — download binaries from official sources
 # ---------------------------------------------------------------------------
-DOWNLOAD_URL="https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_${OS_NAME}_${ARCH_NAME}.tar.gz"
 
-echo "[INFO] Downloading eksctl for ${OS_NAME}/${ARCH_NAME}..."
-curl -sL "${DOWNLOAD_URL}" | tar xz -C /tmp
+# ── eksctl ─────────────────────────────────────────────────────────────────
+if [[ "${EKSCTL_OK}" == "false" ]]; then
+  EKSCTL_URL="https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_${OS_NAME}_${ARCH_NAME}.tar.gz"
+  echo "[INFO] Downloading eksctl for ${OS_NAME}/${ARCH_NAME}..."
+  curl -sL "${EKSCTL_URL}" | tar xz -C /tmp
+  sudo mv /tmp/eksctl /usr/local/bin/eksctl
+  sudo chmod +x /usr/local/bin/eksctl
+  echo "[OK] eksctl installed: $(eksctl version)"
+fi
 
-echo "[INFO] Moving eksctl to /usr/local/bin..."
-sudo mv /tmp/eksctl /usr/local/bin/eksctl
-sudo chmod +x /usr/local/bin/eksctl
-
-echo ""
-echo "[OK] eksctl installed: $(eksctl version)"
+# ── kubectl ─────────────────────────────────────────────────────────────────
+if [[ "${KUBECTL_OK}" == "false" ]]; then
+  echo "[INFO] Fetching latest stable kubectl version..."
+  KUBECTL_VERSION=$(curl -fsSL https://dl.k8s.io/release/stable.txt)
+  KUBECTL_URL="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/${OS_NAME}/${ARCH_NAME}/kubectl"
+  echo "[INFO] Downloading kubectl ${KUBECTL_VERSION} for ${OS_NAME}/${ARCH_NAME}..."
+  curl -fsSL -o /tmp/kubectl "${KUBECTL_URL}"
+  sudo mv /tmp/kubectl /usr/local/bin/kubectl
+  sudo chmod +x /usr/local/bin/kubectl
+  echo "[OK] kubectl installed: $(kubectl version --client 2>/dev/null | head -1)"
+fi
 
 echo ""
 echo "=================================================="
-echo "  EKSCTL READY"
+echo "  TOOLS READY"
 echo "=================================================="
 echo ""
 echo "  Also ensure these are installed and configured:"
 echo "    - AWS CLI v2   : aws --version"
-echo "    - kubectl      : kubectl version --client"
 echo "    - AWS profile  : aws configure --profile sarowar-ostad"
 echo ""
 echo "  Next step: create EKS cluster:"

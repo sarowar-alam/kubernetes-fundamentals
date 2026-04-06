@@ -8,24 +8,24 @@ How a `kubectl apply` becomes a running container: a complete walkthrough of eve
 
 ```
   ┌──────────────────────────────────────────────────────────────────────────────────┐
-  │                              CONTROL PLANE                                      │
+  │                              CONTROL PLANE                                       │
   │                                                                                  │
-  │  ┌──────────────┐    ┌─────────────────┐    ┌──────────────────────────────┐   │
-  │  │   kubectl    │───▶│  kube-apiserver │───▶│           etcd               │   │
-  │  │  (client)    │    │    :6443 TLS    │◀───│  (key-value store :2379)     │   │
-  │  └──────────────┘    └───────┬─────────┘    │  source of truth for all     │   │
-  │                              │              │  cluster state               │   │
-  │           ┌──────────────────┼──────────────└──────────────────────────────┘   │
-  │           │                  │                          │                       │
-  │    ┌──────▼──────┐  ┌────────▼────────────┐  ┌─────────▼────────────────────┐  │
-  │    │   kube-     │  │  kube-controller-   │  │  cloud-controller-manager    │  │
-  │    │  scheduler  │  │      manager        │  │  (EKS only)                  │  │
-  │    │             │  │  ┌ Deployment ctrl  │  │  • provisions AWS NLB        │  │
-  │    │ Filter →    │  │  ├ ReplicaSet ctrl  │  │  • attaches EBS volumes      │  │
-  │    │ Score  →    │  │  ├ Node ctrl        │  │  • manages Route53 DNS       │  │
-  │    │ Bind        │  │  ├ Endpoint ctrl    │  └──────────────────────────────┘  │
-  │    └─────────────┘  │  └ Namespace ctrl   │                                    │
-  │                     └─────────────────────┘                                    │
+  │  ┌──────────────┐    ┌─────────────────┐    ┌──────────────────────────────┐     │
+  │  │   kubectl    │───▶│  kube-apiserver │───▶│           etcd              │     │
+  │  │  (client)    │    │    :6443 TLS    │◀───│  (key-value store :2379)    │      │
+  │  └──────────────┘    └───────┬─────────┘    │  source of truth for all     │     │
+  │                              │              │  cluster state               │     │
+  │           ┌──────────────────┼──────────────└──────────────────────────────┘     │
+  │           │                  │                          │                        │
+  │    ┌──────▼──────┐  ┌────────▼────────────┐  ┌─────────▼────────────────────┐    │
+  │    │   kube-     │  │  kube-controller-   │  │  cloud-controller-manager    │    │
+  │    │  scheduler  │  │      manager        │  │  (EKS only)                  │    │
+  │    │             │  │  ┌ Deployment ctrl  │  │  • provisions AWS NLB        │    │
+  │    │ Filter →    │  │  ├ ReplicaSet ctrl  │  │  • attaches EBS volumes      │    │
+  │    │ Score  →    │  │  ├ Node ctrl        │  │  • manages Route53 DNS       │    │
+  │    │ Bind        │  │  ├ Endpoint ctrl    │  └──────────────────────────────┘    │
+  │    └─────────────┘  │  └ Namespace ctrl   │                                      │
+  │                     └─────────────────────┘                                      │
   └──────────────────────────────────────────────────────────────────────────────────┘
               │ watch loop (HTTPS :6443)         │ watch loop
               ▼                                  ▼
@@ -33,13 +33,13 @@ How a `kubectl apply` becomes a running container: a complete walkthrough of eve
   │      WORKER NODE 1       │      │      WORKER NODE 2       │
   │                          │      │                          │
   │  kubelet                 │      │  kubelet                 │
-  │    └─▶ containerd (CRI)  │      │    └─▶ containerd (CRI)  │
-  │          └─▶ [Pod A]     │      │          └─▶ [Pod C]     │
+  │    └─▶ containerd (CRI)  │      │    └─▶ containerd (CRI) │
+  │          └─▶ [Pod A]     │      │          └─▶ [Pod C]    │
   │               [Pod B]    │      │               [Pod D]    │
   │  kube-proxy              │      │  kube-proxy              │
-  │    └─▶ iptables rules    │      │    └─▶ iptables rules    │
+  │    └─▶ iptables rules    │      │    └─▶ iptables rules   │
   │  CNI plugin              │      │  CNI plugin              │
-  │    └─▶ veth + Pod IP     │      │    └─▶ veth + Pod IP     │
+  │    └─▶ veth + Pod IP     │      │    └─▶ veth + Pod IP    │
   └──────────┬───────────────┘      └──────────┬───────────────┘
              │  NETWORKING LAYER                │
              │  Calico: VXLAN (UDP 4789)        │
@@ -49,7 +49,7 @@ How a `kubectl apply` becomes a running container: a complete walkthrough of eve
   STORAGE (EKS — right side of diagram)
   ┌──────────────────────────────────────────────────────────────┐
   │  PersistentVolumeClaim → PersistentVolume                    │
-  │       → aws-ebs-csi-driver → AWS EBS (gp3)                  │
+  │       → aws-ebs-csi-driver → AWS EBS (gp3)                   │
   └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -125,18 +125,18 @@ Each step is expanded in detail in the sections below.
 
 ```
   kubectl             CI/CD pipeline         kubelet (node)
-      │                     │                     │
+      │                      │                    │
       └────────────┬─────────┘                    │
                    │                              │
                    ▼                              │
            ┌──────────────┐◀─────────────────────┘
            │ kube-apiserver│
-           │              │
+           │               │
            │ 1. AuthN      │  ← Who are you? (TLS client cert, token, OIDC)
            │ 2. AuthZ      │  ← Are you allowed? (RBAC rules)
            │ 3. Admission  │  ← Is this valid? (webhooks, schema)
            │ 4. Persist    │  ← Write to etcd
-           └──────┬───────┘
+           └──────┬────────┘
                   │
                   ▼
                etcd
@@ -237,7 +237,7 @@ sudo ETCDCTL_API=3 etcdctl \
   │  Phase 1: FILTERING                  │
   │  Eliminate nodes that cannot run     │
   │  this Pod:                           │
-  │  ✗ Not enough CPU/memory            │
+  │  ✗ Not enough CPU/memory             │
   │  ✗ Node has incompatible taint       │
   │  ✗ Node does not match nodeSelector  │
   │                                      │
@@ -515,7 +515,7 @@ kubectl logs -n kube-system -l k8s-app=kube-proxy
   │   │                     │               │   │                     │
   │  node routing table     │               │  node routing table     │
   └──────────┬──────────────┘               └──────────┬──────────────┘
-             │  VXLAN tunnel (UDP 4789)                 │
+             │  VXLAN tunnel (UDP 4789)                │
              └─────────────────────────────────────────┘
 ```
 
@@ -585,26 +585,26 @@ kubectl get endpoints static-site-nodeport -w
 ```
   ┌──────────────────────────────────────────────────────────────────┐
   │  ClusterIP (default)                                             │
-  │  In-cluster only. No external access.                           │
-  │  Use for: databases, internal APIs.                             │
+  │  In-cluster only. No external access.                            │
+  │  Use for: databases, internal APIs.                              │
   │                                                                  │
-  │  [Pod] → ClusterIP:80 → iptables → [backend Pod]               │
+  │  [Pod] → ClusterIP:80 → iptables → [backend Pod]                 │
   └──────────────────────────────────────────────────────────────────┘
 
   ┌──────────────────────────────────────────────────────────────────┐
   │  NodePort                                                        │
-  │  Opens a port (30000-32767) on EVERY node.                      │
-  │  Use for: dev/test, kubeadm clusters.                           │
+  │  Opens a port (30000-32767) on EVERY node.                       │
+  │  Use for: dev/test, kubeadm clusters.                            │
   │                                                                  │
-  │  External → node-ip:30090 → ClusterIP:80 → [backend Pod]       │
+  │  External → node-ip:30090 → ClusterIP:80 → [backend Pod]         │
   └──────────────────────────────────────────────────────────────────┘
 
   ┌──────────────────────────────────────────────────────────────────┐
-  │  LoadBalancer (EKS only in this repo)                           │
-  │  Provisions a real AWS NLB.                                     │
-  │  Use for: production public endpoints.                          │
+  │  LoadBalancer (EKS only in this repo)                            │
+  │  Provisions a real AWS NLB.                                      │
+  │  Use for: production public endpoints.                           │
   │                                                                  │
-  │  Internet → NLB DNS → node:30090 → ClusterIP:80 → [backend Pod]│
+  │  Internet → NLB DNS → node:30090 → ClusterIP:80 → [backend Pod]  │
   └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -744,8 +744,8 @@ Kubernetes separates *what storage is needed* (PersistentVolumeClaim) from *what
   ┌───────────────────────────┐
   │ PersistentVolumeClaim     │
   │ name: my-data             │
-  │ storageClassName: gp3    │
-  │ accessMode: ReadWriteOnce│
+  │ storageClassName: gp3     │
+  │ accessMode: ReadWriteOnce │
   │ storage: 20Gi             │
   └──────────────┬────────────┘
                    │
@@ -767,7 +767,7 @@ Kubernetes separates *what storage is needed* (PersistentVolumeClaim) from *what
   ┌──────────────┬────────────┐
   │ AWS EBS Volume (gp3)      │
   │ 20 GiB, encrypted         │
-  │ us-east-1a (same AZ as   │
+  │ us-east-1a (same AZ as    │
   │ the scheduled Pod)        │
   └──────────────┬────────────┘
                    │

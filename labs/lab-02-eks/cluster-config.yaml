@@ -34,7 +34,7 @@ metadata:
 
   # Kubernetes version for the control plane
   # EKS manages master node upgrades; just bump this number
-  version: "1.29"
+  version: "1.35"
 
   # Tags are key-value labels applied to all AWS resources created
   # Useful for billing reports and resource tracking
@@ -121,8 +121,8 @@ managedNodeGroups:
     volumeSize: 20
 
     # amiFamily determines the base OS for worker nodes
-    # AmazonLinux2 is AWS-optimized, well-tested with EKS
-    amiFamily: AmazonLinux2
+    # AmazonLinux2023 is required for Kubernetes 1.25+ (AL2 is EOL for 1.30+)
+    amiFamily: AmazonLinux2023
 
     # SSH access configuration
     # Allows you to SSH into worker nodes for debugging

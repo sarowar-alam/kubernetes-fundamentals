@@ -1,0 +1,51 @@
+# =============================================================================
+# service-clusterip.yaml
+# ClusterIP Service — internal-only access within the cluster
+#
+# USE CASE:
+#   - Database connections (MySQL, PostgreSQL, Redis)
+#   - Backend APIs called by other microservices
+#   - ANY service that should NEVER be exposed to the internet
+#
+# HOW IT WORKS:
+#   - Kubernetes assigns a stable virtual IP (Cluster IP, e.g., 10.96.0.5)
+#   - kube-proxy creates iptables rules: traffic to 10.96.0.5:80 → pods
+#   - Other pods can reach this service using its NAME (DNS):
+#       http://nginx-clusterip-svc.default.svc.cluster.local
+#       http://nginx-clusterip-svc          (within same namespace)
+#
+# Lab Steps:
+#   1. First apply the deployment: kubectl apply -f ../03-deployment/deployment.yaml
+#   2. Apply this service:         kubectl apply -f service-clusterip.yaml
+#   3. Verify:                     kubectl get svc
+#   4. Describe:                   kubectl describe svc nginx-clusterip-svc
+#   5. Test from inside cluster:
+#         kubectl run test-pod --image=busybox --restart=Never --rm -it -- /bin/sh
+#         # Inside the shell:
+#         wget -qO- http://nginx-clusterip-svc
+#   6. Cleanup:                    kubectl delete -f service-clusterip.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: nginx-clusterip-svc
+  labels:
+    app: nginx
+
+spec:
+  # ClusterIP = internal only, no external access
+  # This is the DEFAULT type if you don't specify one
+  type: ClusterIP
+
+  # selector: which pods should this service send traffic to?
+  # Must match the labels on your pods
+  selector:
+    app: nginx
+
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80        # Port the SERVICE listens on (what callers connect to)
+      targetPort: 80  # Port on the POD that receives the traffic

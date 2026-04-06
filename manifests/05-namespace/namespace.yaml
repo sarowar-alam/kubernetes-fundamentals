@@ -1,0 +1,51 @@
+# =============================================================================
+# namespace.yaml
+# Creates two namespaces: dev and staging
+#
+# CONCEPT:
+#   A Namespace is a virtual cluster within a cluster.
+#   It isolates resources so different teams / environments don't conflict.
+#
+# REAL-WORLD USE:
+#   Company has 3 teams: frontend, backend, data
+#   Each team gets their own namespace
+#   They can manage their own resources without stepping on each other
+#   Admins can set CPU/memory limits per namespace (ResourceQuotas)
+#
+# Built-in namespaces (created by Kubernetes):
+#   default       - where resources go if you don't specify a namespace
+#   kube-system   - Kubernetes core components (don't touch these)
+#   kube-public   - readable by all users (used for cluster info)
+#   kube-node-lease - heartbeat objects for node health tracking
+#
+# Lab Steps:
+#   1. Apply:            kubectl apply -f namespace.yaml
+#   2. List namespaces:  kubectl get namespaces
+#   3. Deploy in dev:    kubectl apply -f ../03-deployment/deployment.yaml -n dev
+#   4. List pods in dev: kubectl get pods -n dev
+#   5. Dev is isolated from staging:
+#                        kubectl get pods -n staging  (empty — different namespace)
+#   6. Switch default ns: kubectl config set-context --current --namespace=dev
+#   7. Cleanup:          kubectl delete -f namespace.yaml
+#                        (This also deletes all resources in those namespaces)
+# =============================================================================
+
+---
+# First namespace: dev (for development workloads)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    team: ostad-batch09
+    environment: development
+
+---
+# Second namespace: staging (pre-production environment)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    team: ostad-batch09
+    environment: staging

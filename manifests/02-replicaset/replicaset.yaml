@@ -1,0 +1,68 @@
+# =============================================================================
+# replicaset.yaml
+# A ReplicaSet that ensures 3 nginx pods are always running
+#
+# KEY CONCEPT:
+#   You declare "I always want 3 replicas" (desired state)
+#   The ReplicaSet controller continuously ensures this is true
+#   If 1 pod dies → ReplicaSet creates a new one (self-healing)
+#   If 1 extra pod appears → ReplicaSet deletes it
+#
+# Lab Steps — Self-Healing Demo:
+#   1. Apply:         kubectl apply -f replicaset.yaml
+#   2. List pods:     kubectl get pods --show-labels
+#   3. List rs:       kubectl get rs
+#   4. Open watcher:  kubectl get pods -w
+#   5. Delete a pod:  kubectl delete pod <one-of-the-pods>
+#   6. Observe:       A new pod is created instantly
+#   7. Scale to 5:    kubectl scale rs nginx-rs --replicas=5
+#   8. Scale to 2:    kubectl scale rs nginx-rs --replicas=2
+#   9. Cleanup:       kubectl delete -f replicaset.yaml
+#
+# NOTE:
+#   In production, you rarely create ReplicaSets directly.
+#   You use Deployments, which manage ReplicaSets for you.
+#   Deployments add rolling updates and version rollbacks on top of ReplicaSets.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: ReplicaSet
+
+metadata:
+  name: nginx-rs
+  labels:
+    app: nginx
+    tier: web
+
+spec:
+  # How many pod copies should always be running?
+  replicas: 3
+
+  # selector: how the ReplicaSet IDENTIFIES which pods it owns
+  # THIS MUST MATCH the labels in spec.template.metadata.labels exactly
+  # The ReplicaSet counts pods with these labels to know if 3 are running
+  selector:
+    matchLabels:
+      app: nginx
+      tier: web
+
+  # template: the blueprint for each pod the ReplicaSet creates
+  # Everything under template is a pod spec
+  template:
+    metadata:
+      labels:
+        app: nginx    # MUST match selector.matchLabels
+        tier: web     # MUST match selector.matchLabels
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"

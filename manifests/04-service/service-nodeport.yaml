@@ -1,0 +1,52 @@
+# =============================================================================
+# service-nodeport.yaml
+# NodePort Service — exposes the app on a static port on EVERY node
+#
+# USE CASE:
+#   - Development, testing, demos
+#   - Accessing your app from outside the cluster WITHOUT a cloud load balancer
+#   - Labs (when you don't have cloud LB integration)
+#
+# HOW IT WORKS:
+#   - Kubernetes opens a port in range 30000-32767 on EVERY node
+#   - Traffic to <any-node-public-ip>:<nodePort> → pods
+#   - Example: http://54.123.45.67:30080
+#
+# WHY NOT USE IN PRODUCTION:
+#   - Exposes ports on all nodes — messy at scale
+#   - Port range (30000-32767) looks unprofessional to users
+#   - No TLS termination
+#   - Use LoadBalancer or Ingress for production
+#
+# Lab Steps:
+#   1. First apply the deployment: kubectl apply -f ../03-deployment/deployment.yaml
+#   2. Apply this service:         kubectl apply -f service-nodeport.yaml
+#   3. Verify:                     kubectl get svc
+#   4. Find assigned port:         kubectl get svc nginx-nodeport-svc
+#   5. Get node public IP:         kubectl get nodes -o wide
+#   6. Open in browser:            http://<node-public-ip>:30080
+#   7. Cleanup:                    kubectl delete -f service-nodeport.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: nginx-nodeport-svc
+  labels:
+    app: nginx
+
+spec:
+  type: NodePort
+
+  # selector: route traffic to pods with these labels
+  selector:
+    app: nginx
+
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80          # Service port (used for in-cluster traffic)
+      targetPort: 80    # Pod port
+      nodePort: 30080   # Port opened on every node (must be 30000-32767)
+                        # OPTIONAL: remove this line to let Kubernetes pick a random port

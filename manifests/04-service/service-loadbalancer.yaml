@@ -1,0 +1,64 @@
+# =============================================================================
+# service-loadbalancer.yaml
+# LoadBalancer Service — provisions a real cloud load balancer automatically
+#
+# USE CASE:
+#   - Production web applications
+#   - Any service that needs to be publicly accessible
+#   - Works best on cloud-managed K8s (EKS, GKE, AKS)
+#
+# HOW IT WORKS on EKS (AWS):
+#   - You apply this YAML
+#   - The AWS Cloud Controller Manager sees the LoadBalancer service
+#   - It calls AWS API to provision an NLB (Network Load Balancer)
+#   - AWS assigns a public DNS name (e.g., xxxx.elb.ap-south-1.amazonaws.com)
+#   - Traffic to that DNS → NLB → nodes → pods
+#
+# HOW IT WORKS on kubeadm (bare EC2):
+#   - WARNING: Does NOT work out of the box (no cloud controller)
+#   - Service will stay stuck in "Pending" state forever
+#   - On kubeadm, use NodePort or install MetalLB instead
+#
+# COST WARNING:
+#   On AWS, each LoadBalancer service creates an NLB.
+#   NLB costs ~$0.008/hour + data transfer.
+#   For 5 services × $0.008 = $0.04/hour — manageable, but be aware.
+#   Use Ingress (future module) to expose multiple services through ONE NLB.
+#
+# Lab Steps (run on EKS):
+#   1. First apply the deployment: kubectl apply -f ../03-deployment/deployment.yaml
+#   2. Apply this service:         kubectl apply -f service-loadbalancer.yaml
+#   3. Watch for EXTERNAL-IP:      kubectl get svc nginx-lb-svc -w
+#   4. Wait 60-90 seconds for AWS to provision NLB
+#   5. Test:                       curl http://<EXTERNAL-IP>
+#   6. Cleanup:                    kubectl delete -f service-loadbalancer.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: nginx-lb-svc
+  labels:
+    app: nginx
+  annotations:
+    # AWS-specific annotation: request a Network Load Balancer (NLB) instead of Classic LB
+    # NLB = Layer 4 (TCP) — faster, supports static IPs
+    # ALB (Application Load Balancer) is Layer 7 and requires the AWS LB Controller + Ingress
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+
+    # Optional: restrict which IPs can access this load balancer
+    # service.beta.kubernetes.io/load-balancer-source-ranges: "0.0.0.0/0"
+
+spec:
+  type: LoadBalancer
+
+  # selector: send traffic to pods with these labels
+  selector:
+    app: nginx
+
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80        # Port the load balancer listens on (public port)
+      targetPort: 80  # Port on the pods

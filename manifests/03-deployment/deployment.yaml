@@ -1,0 +1,98 @@
+# =============================================================================
+# deployment.yaml
+# A Deployment that manages a ReplicaSet of nginx pods
+#
+# DEPLOYMENT ADDS to ReplicaSet:
+#   - Rolling updates (update image without downtime)
+#   - Rollbacks (undo a bad update with one command)
+#   - Update history (see every change)
+#
+# Lab Steps — Rolling Update Demo:
+#   1. Apply:         kubectl apply -f deployment.yaml
+#   2. Verify:        kubectl get deployments
+#                     kubectl get pods -o wide
+#
+#   ROLLING UPDATE:
+#   3. Update image:  kubectl set image deployment/nginx-deployment nginx=nginx:1.25
+#   4. Watch:         kubectl rollout status deployment/nginx-deployment
+#   5. History:       kubectl rollout history deployment/nginx-deployment
+#
+#   ROLLBACK:
+#   6. Rollback:      kubectl rollout undo deployment/nginx-deployment
+#   7. Verify:        kubectl describe deployment nginx-deployment | grep Image
+#
+#   SCALING:
+#   8. Scale up:      kubectl scale deployment nginx-deployment --replicas=5
+#   9. Scale down:    kubectl scale deployment nginx-deployment --replicas=2
+#
+#  10. Cleanup:       kubectl delete -f deployment.yaml
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+  # Annotations are non-identifying metadata (for humans and tools)
+  # Use annotations to record the reason for a change — visible in rollout history
+  annotations:
+    kubernetes.io/change-cause: "Initial deployment with nginx:alpine"
+
+spec:
+  # Number of pod replicas to maintain
+  replicas: 3
+
+  # selector: which pods does this Deployment own?
+  # Must match spec.template.metadata.labels
+  selector:
+    matchLabels:
+      app: nginx
+
+  # strategy: how to update pods when you change the image
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # maxSurge: how many EXTRA pods can exist during an update?
+      # 1 means: during update, up to 4 pods may exist (3 desired + 1 extra)
+      # This ensures new pods start before old ones are killed
+      maxSurge: 1
+
+      # maxUnavailable: how many pods can be DOWN during an update?
+      # 0 means: zero downtime. All 3 replicas stay available at all times.
+      # If you set this to 1, one pod is killed before the new one starts
+      maxUnavailable: 0
+
+  # template: the blueprint for pods this Deployment creates
+  template:
+    metadata:
+      labels:
+        app: nginx     # MUST match spec.selector.matchLabels
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine      # Change this value to trigger a rolling update
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5

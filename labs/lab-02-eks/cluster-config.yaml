@@ -1,0 +1,155 @@
+# =============================================================================
+# cluster-config.yaml
+# EKS cluster configuration for eksctl
+#
+# Create cluster:   eksctl create cluster -f cluster-config.yaml
+# Delete cluster:   eksctl delete cluster -f cluster-config.yaml
+#
+# Estimated cost (ap-south-1):
+#   EKS Control Plane : $0.10/hr  (billed even with 0 nodes)
+#   2x t3.medium nodes: ~$0.08/hr
+#   Total             : ~$0.18/hr → ~$0.36 per 2-hour session
+#
+# ALWAYS DELETE when done: eksctl delete cluster -f cluster-config.yaml
+# =============================================================================
+
+# The API version for eksctl configuration
+# eksctl.io/v1alpha5 is the stable, widely-supported version
+apiVersion: eksctl.io/v1alpha5
+
+# Must be "ClusterConfig" — this is the top-level object type
+kind: ClusterConfig
+
+# ---------------------------------------------------------------------------
+# metadata: Basic cluster identity
+# ---------------------------------------------------------------------------
+metadata:
+  # The name of your EKS cluster
+  # This appears in AWS Console → EKS → Clusters
+  name: ostad-batch09-eks
+
+  # AWS region where the cluster will be created
+  # ap-south-1 = Mumbai — closest to Bangladesh, lower latency
+  region: ap-south-1
+
+  # Kubernetes version for the control plane
+  # EKS manages master node upgrades; just bump this number
+  version: "1.29"
+
+  # Tags are key-value labels applied to all AWS resources created
+  # Useful for billing reports and resource tracking
+  tags:
+    Project: ostad-batch09
+    Module: kubernetes-fundamentals
+    ManagedBy: eksctl
+
+# ---------------------------------------------------------------------------
+# iam: Identity and Access Management configuration
+# ---------------------------------------------------------------------------
+iam:
+  # withOIDC enables the OpenID Connect provider for this cluster
+  #
+  # WHY THIS MATTERS (Real-world):
+  # Without OIDC, your pods cannot securely access AWS services (S3, DynamoDB, etc.)
+  # They would need hardcoded AWS access keys — a serious security risk.
+  #
+  # With OIDC, you create an IAM Role with a policy and attach it to a
+  # Kubernetes Service Account. Pods using that SA get temporary AWS credentials
+  # automatically — no secrets needed. This is called IRSA (IAM Roles for Service Accounts).
+  withOIDC: true
+
+# ---------------------------------------------------------------------------
+# addons: Kubernetes plugins managed by AWS
+# These are installed and upgraded by AWS as part of the managed cluster
+# ---------------------------------------------------------------------------
+addons:
+    # vpc-cni: AWS VPC Container Network Interface
+    # Assigns real VPC IP addresses to your pods (not overlay IPs)
+    # WHY: pods get real VPC IPs, enabling direct communication with other AWS services
+  - name: vpc-cni
+    # "latest" means EKS installs the most current compatible version
+    version: latest
+
+    # coredns: Cluster DNS server
+    # Every pod resolves service names (e.g., "my-service.default.svc.cluster.local")
+    # through CoreDNS. Without it, services can't find each other by name.
+  - name: coredns
+    version: latest
+
+    # kube-proxy: Network rules manager on each node
+    # Implements Kubernetes Services using iptables/IPVS rules
+    # Without it, traffic to a Service IP would not reach your pods
+  - name: kube-proxy
+    version: latest
+
+    # aws-ebs-csi-driver: Amazon EBS Container Storage Interface driver
+    # Required for PersistentVolumes backed by EBS disks
+    # WHY: if you deploy a database (MySQL, PostgreSQL) and it needs persistent storage,
+    # this driver creates and attaches EBS volumes to your pods automatically
+  - name: aws-ebs-csi-driver
+    version: latest
+
+# ---------------------------------------------------------------------------
+# managedNodeGroups: Worker nodes managed by AWS
+# AWS handles OS patching, node replacement, and scaling
+# ---------------------------------------------------------------------------
+managedNodeGroups:
+  - # Unique name for this node group
+    # You can have multiple node groups (e.g., one for general workloads, one for GPU)
+    name: workers
+
+    # EC2 instance type for worker nodes
+    # t3.medium = 2 vCPU / 4GB RAM — good for demo/testing
+    # Production suggestion: m5.xlarge or c5.2xlarge for real workloads
+    instanceType: t3.medium
+
+    # Minimum number of nodes (Auto Scaling Group lower bound)
+    # Even during low traffic, at least 1 node always runs
+    minSize: 1
+
+    # Maximum number of nodes (Auto Scaling Group upper bound)
+    # During traffic spikes, Kubernetes can scale up to this many nodes
+    # Cost control: cap this to avoid surprise bills
+    maxSize: 3
+
+    # Desired number of nodes at cluster creation
+    # Can be adjusted later: eksctl scale nodegroup --nodes=X
+    desiredCapacity: 2
+
+    # EBS volume size per node (in GB)
+    # Used for container images, container logs, and node OS
+    volumeSize: 20
+
+    # amiFamily determines the base OS for worker nodes
+    # AmazonLinux2 is AWS-optimized, well-tested with EKS
+    amiFamily: AmazonLinux2
+
+    # SSH access configuration
+    # Allows you to SSH into worker nodes for debugging
+    # In production, you would typically disable this and use SSM Session Manager instead
+    ssh:
+      allow: true
+      # Name of an existing EC2 Key Pair in ap-south-1
+      publicKeyName: k8s-lab-key
+
+    # Labels are key-value metadata attached to every node in this group
+    # Used by nodeSelectors to pin specific pods to specific nodes
+    labels:
+      role: worker
+      environment: training
+
+    # Tags for AWS resource tracking and billing
+    tags:
+      NodeGroup: workers
+      Project: ostad-batch09
+
+    # IAM policies attached to the node's IAM role
+    # These control what AWS APIs the node itself can call
+    iam:
+      withAddonPolicies:
+        # autoScaler: allows Cluster Autoscaler to add/remove nodes automatically
+        autoScaler: true
+        # ebs: allows the EBS CSI driver to create/attach/detach EBS volumes
+        ebs: true
+        # cloudWatch: allows nodes to send logs to CloudWatch
+        cloudWatch: true

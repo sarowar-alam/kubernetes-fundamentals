@@ -1,0 +1,39 @@
+# =============================================================================
+# pod-basic.yaml
+# A simple Pod running nginx
+#
+# Lab Steps:
+#   1. Apply:    kubectl apply -f pod-basic.yaml
+#   2. Verify:   kubectl get pods
+#   3. Details:  kubectl describe pod nginx-basic
+#   4. Logs:     kubectl logs nginx-basic
+#   5. Shell:    kubectl exec -it nginx-basic -- /bin/sh
+#   6. Cleanup:  kubectl delete -f pod-basic.yaml
+# =============================================================================
+
+apiVersion: v1          # The Kubernetes API version for this object type
+kind: Pod               # Object type: a Pod (one or more containers)
+
+metadata:
+  name: nginx-basic     # Unique name for this pod in the namespace
+  labels:
+    app: nginx          # Label: used by Services and selectors to find this pod
+    tier: web           # Another label: for multi-label filtering
+
+spec:                   # What should this pod actually contain?
+  containers:
+    - name: nginx                   # Name of this specific container
+      image: nginx:alpine           # Docker image to pull (alpine = small, ~7MB)
+      ports:
+        - containerPort: 80         # The port this container listens on (documentation only)
+
+      # Resource requests and limits
+      # requests: minimum guaranteed resources (used by scheduler to pick a node)
+      # limits:   maximum resources the container can use (exceeding CPU = throttle, RAM = OOMKill)
+      resources:
+        requests:
+          cpu: "100m"               # 100 millicores = 0.1 vCPU
+          memory: "64Mi"            # 64 mebibytes of RAM
+        limits:
+          cpu: "200m"               # Never use more than 0.2 vCPU
+          memory: "128Mi"           # Never use more than 128Mi RAM

@@ -1,0 +1,72 @@
+# =============================================================================
+# .gitignore — kubernetes-fundamentals
+# Repository: https://github.com/sarowar-alam/kubernetes-fundamentals
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# INSTRUCTOR-ONLY FILES
+# These files contain teaching notes, emphasis points, and demo scripts
+# that are not part of the student curriculum.
+# -----------------------------------------------------------------------------
+docs/instructor-notes.md
+
+# -----------------------------------------------------------------------------
+# RUNTIME / GENERATED FILES
+# Created by provision-cluster.sh at class time; contain live AWS resource IDs
+# and public IP addresses — must never be committed.
+# -----------------------------------------------------------------------------
+scripts/cluster-state.env
+scripts/cluster-state.env.destroyed
+
+# -----------------------------------------------------------------------------
+# SECRETS & CREDENTIALS — NEVER COMMIT
+# -----------------------------------------------------------------------------
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example        # Allow a safe placeholder/example file if added later
+
+# -----------------------------------------------------------------------------
+# OS ARTIFACTS
+# -----------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# -----------------------------------------------------------------------------
+# EDITOR & IDE
+# -----------------------------------------------------------------------------
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# -----------------------------------------------------------------------------
+# TERRAFORM / PULUMI (if added in future modules)
+# -----------------------------------------------------------------------------
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# -----------------------------------------------------------------------------
+# HELM (if added in future modules)
+# -----------------------------------------------------------------------------
+charts/*.tgz

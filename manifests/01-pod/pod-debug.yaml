@@ -1,0 +1,99 @@
+# =============================================================================
+# pod-debug.yaml
+# A Pod designed for debugging — shows multi-container pattern (sidecar)
+# and common diagnostic techniques
+#
+# Lab Steps:
+#   1. Apply:     kubectl apply -f pod-debug.yaml
+#   2. Watch:     kubectl get pods -w
+#   3. Shell:     kubectl exec -it nginx-debug -c nginx -- /bin/sh
+#   4. Sidecar:   kubectl exec -it nginx-debug -c logger -- /bin/sh
+#   5. Both logs: kubectl logs nginx-debug -c nginx
+#                 kubectl logs nginx-debug -c logger
+#   6. Details:   kubectl describe pod nginx-debug
+#   7. Cleanup:   kubectl delete -f pod-debug.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+
+metadata:
+  name: nginx-debug
+  labels:
+    app: nginx
+    purpose: debugging
+
+spec:
+  containers:
+    # -----------------------------------------------------------------------
+    # Container 1: Main application container
+    # -----------------------------------------------------------------------
+    - name: nginx
+      image: nginx:alpine
+      ports:
+        - containerPort: 80
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "64Mi"
+        limits:
+          cpu: "200m"
+          memory: "128Mi"
+
+      # Liveness probe: "Is this container alive?"
+      # If this check fails 3 times, Kubernetes restarts the container
+      livenessProbe:
+        httpGet:
+          path: /          # Check the root URL
+          port: 80
+        initialDelaySeconds: 5   # Wait 5s before first check
+        periodSeconds: 10        # Check every 10s
+        failureThreshold: 3      # Restart after 3 consecutive failures
+
+      # Readiness probe: "Is this container ready to receive traffic?"
+      # If this fails, the pod is removed from the Service's routing pool
+      # (traffic stops going to it) but the container is NOT restarted
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 3
+        periodSeconds: 5
+
+      # Volume mount: allows the nginx and logger containers to share a directory
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /var/log/nginx   # nginx writes logs here
+
+    # -----------------------------------------------------------------------
+    # Container 2: Sidecar container (reads the same log files)
+    # This demonstrates the SIDECAR PATTERN
+    # WHY: in production, a sidecar reads logs and forwards them to a central
+    #      logging system (Fluentd, Datadog, CloudWatch) without changing the main app
+    # -----------------------------------------------------------------------
+    - name: logger
+      image: busybox:1.36
+      # Tail the nginx access log and print to stdout
+      # (kubectl logs nginx-debug -c logger will show nginx access logs)
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "Logger sidecar started. Waiting for nginx logs..."
+          while true; do
+            if [ -f /var/log/nginx/access.log ]; then
+              tail -f /var/log/nginx/access.log
+            else
+              sleep 2
+            fi
+          done
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /var/log/nginx   # Same path as nginx container
+
+  # -------------------------------------------------------------------------
+  # Volumes: shared storage between containers in this pod
+  # emptyDir = a temporary directory that lives as long as the pod lives
+  # -------------------------------------------------------------------------
+  volumes:
+    - name: shared-logs
+      emptyDir: {}   # Empty directory, created when pod starts, deleted when pod dies

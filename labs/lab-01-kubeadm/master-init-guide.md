@@ -517,3 +517,12 @@ kubectl delete deployment verify
 | `journalctl -u kubelet` shows errors | containerd not running | `sudo systemctl restart containerd` |
 | Token expired on worker join | Tokens last 24h | Re-run on master: `sudo kubeadm token create --print-join-command` |
 
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/
+

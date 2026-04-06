@@ -391,3 +391,12 @@ Example: `kubectl get po` is the same as `kubectl get pods`
 | `--force` | Force delete | `kubectl delete pod x --force` |
 | `-l <label>` | Label selector | `kubectl get pods -l app=nginx` |
 | `--show-labels` | Show all labels | `kubectl get pods --show-labels` |
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

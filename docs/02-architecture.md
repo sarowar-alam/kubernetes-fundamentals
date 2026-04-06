@@ -307,3 +307,12 @@ Step 7: Run `kubectl get pods`:
 4. **"kube-proxy is a proxy like nginx"** — kube-proxy writes iptables rules at the kernel level. It is transparent to applications; no traffic passes through a userspace process.
 
 5. **"Docker is required to use Kubernetes"** — Kubernetes uses `containerd` directly via the CRI. Docker is not a runtime dependency.
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

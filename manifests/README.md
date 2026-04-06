@@ -571,3 +571,12 @@ kubectl get pods --show-labels
 # Which pods does a service select?
 kubectl get pods -l app=nginx
 ```
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

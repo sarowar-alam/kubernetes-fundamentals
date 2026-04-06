@@ -182,3 +182,12 @@ This module focuses on Kubernetes core. Future modules will layer in Helm, ArgoC
 - K8s is self-healing, auto-scaling, and zero-downtime capable
 - It is the industry standard — used by every major company
 - The labs in this repository build real clusters on AWS from scratch
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

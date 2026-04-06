@@ -35,20 +35,20 @@ AWS ap-south-1 — devops-vpc (10.0.0.0/16)
 ┌─────────────────────────────────────────────────────┐
 │  Public Subnet (ap-south-1a)                        │
 │  ┌──────────────────────────────────────────────┐   │
-│  │  Master Node (t3.medium, Ubuntu 22.04)        │   │
-│  │  • kube-apiserver   :6443                     │   │
-│  │  • etcd             :2379                     │   │
-│  │  • kube-scheduler                             │   │
-│  │  • kube-controller-manager                    │   │
-│  │  • Calico CNI (podCIDR: 192.168.0.0/16)       │   │
+│  │  Master Node (t3.medium, Ubuntu 22.04)       │   │
+│  │  • kube-apiserver   :6443                    │   │
+│  │  • etcd             :2379                    │   │
+│  │  • kube-scheduler                            │   │
+│  │  • kube-controller-manager                   │   │
+│  │  • Calico CNI (podCIDR: 192.168.0.0/16)      │   │
 │  └──────────────────────────────────────────────┘   │
-│                                                      │
-│  Private Subnets (1b / 1c)                           │
-│  ┌──────────────────────┐  ┌──────────────────────┐  │
-│  │  Worker Node 1       │  │  Worker Node 2       │  │
-│  │  t3.medium           │  │  t3.medium           │  │
-│  │  kubelet + containerd│  │  kubelet + containerd│  │
-│  └──────────────────────┘  └──────────────────────┘  │
+│                                                     │
+│  Private Subnets (1b / 1c)                          │
+│  ┌──────────────────────┐  ┌──────────────────────┐ │
+│  │  Worker Node 1       │  │  Worker Node 2       │ │
+│  │  t3.medium           │  │  t3.medium           │ │
+│  │  kubelet + containerd│  │  kubelet + containerd│ │
+│  └──────────────────────┘  └──────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -62,11 +62,11 @@ AWS ap-south-1 — eksctl-managed VPC (192.168.0.0/16)
 │  AWS-Managed Control Plane (invisible, SLA-backed)          │
 │  kube-apiserver · etcd · kube-scheduler · kube-cm           │
 ├─────────────────────────────────────────────────────────────│
-│  Public Subnets (1a · 1b · 1c) — IGW, NAT Gateway, NLBs    │
+│  Public Subnets (1a · 1b · 1c) — IGW, NAT Gateway, NLBs     │
 ├─────────────────────────────────────────────────────────────│
-│  Private Subnets (1a · 1b · 1c) — Worker Nodes             │
+│  Private Subnets (1a · 1b · 1c) — Worker Nodes              │
 │  ┌─────────────────────────────────────────────────────┐    │
-│  │  Managed Node Group (t3.medium, AmazonLinux2023)     │    │
+│  │  Managed Node Group (t3.medium, AmazonLinux2023)    │    │
 │  │  1–3 replicas · gp3 EBS · OIDC/IRSA enabled         │    │
 │  └─────────────────────────────────────────────────────┘    │
 │  AWS Addons: vpc-cni · coredns · kube-proxy · ebs-csi       │
@@ -648,3 +648,12 @@ kubectl delete -f manifests/01-pod/
 | eksctl documentation | https://eksctl.io/ |
 | AWS EKS user guide | https://docs.aws.amazon.com/eks/latest/userguide/ |
 | Calico docs | https://docs.tigera.io/calico/latest/ |
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

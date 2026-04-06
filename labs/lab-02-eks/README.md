@@ -1095,3 +1095,12 @@ Also verify in AWS Console:
 | LoadBalancer stuck in `<pending>` | Wait 90 seconds; check `kubectl describe svc nginx-eks` for events |
 | Nodes not joining the cluster | Check CloudFormation stack for the node group — look at Events tab |
 | eksctl delete cluster hangs | Check CloudFormation in AWS Console and delete stacks manually if needed |
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

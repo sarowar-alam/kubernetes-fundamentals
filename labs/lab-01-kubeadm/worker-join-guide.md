@@ -562,3 +562,12 @@ kubectl delete pod test-nginx
 | Join succeeds but node never appears | Wrong MASTER_IP used | Verify you used the **private** IP (10.x.x.x), not the public IP |
 | `WARN: InitConfiguration found but will not use it` | Old kubelet state | `sudo kubeadm reset -f` on the worker, then re-run join |
 | Container runtime not found | containerd not active | `sudo systemctl restart containerd` then retry join |
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

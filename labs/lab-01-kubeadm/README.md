@@ -501,3 +501,12 @@ If the apiserver is not running, inspect static pod manifests:
 sudo ls /etc/kubernetes/manifests/
 sudo crictl ps -a   # list all containers including failed ones
 ```
+
+---
+
+## 🧑‍💻 Author
+
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

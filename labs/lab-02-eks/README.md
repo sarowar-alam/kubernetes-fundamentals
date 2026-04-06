@@ -46,6 +46,79 @@ kubectl version --client
 
 ---
 
+## Connect to an Existing EKS Cluster
+
+If an EKS cluster is already running in your AWS account and you need to configure a new machine to manage it, follow these steps. No cluster creation is required.
+
+### 1. Configure AWS credentials
+
+If the machine has an IAM instance role attached (e.g. the `SSM` profile), credentials are automatic — skip to step 2.
+
+Otherwise, configure a named profile:
+
+```bash
+aws configure --profile sarowar-ostad
+# Prompts for: Access Key ID, Secret Access Key, region (ap-south-1), output (json)
+```
+
+Verify authentication:
+```bash
+aws sts get-caller-identity --profile sarowar-ostad
+```
+
+### 2. Find the cluster name
+
+```bash
+aws eks list-clusters --region ap-south-1 --profile sarowar-ostad
+```
+
+### 3. Update kubeconfig
+
+```bash
+aws eks update-kubeconfig \
+  --region ap-south-1 \
+  --name <your-cluster-name> \
+  --profile sarowar-ostad
+```
+
+This writes the cluster endpoint, CA certificate, and authentication token command into `~/.kube/config`. If a context for this cluster already exists, it is overwritten.
+
+### 4. Verify access
+
+```bash
+kubectl get nodes
+kubectl get pods -A
+```
+
+---
+
+### Troubleshooting: `Unauthorized` error
+
+If `kubectl get nodes` returns `error: You must be logged in to the server (Unauthorized)`, the IAM identity used does not have access to the cluster's Kubernetes RBAC.
+
+Fix — run this from a machine that already has admin access to the cluster:
+
+```bash
+eksctl create iamidentitymapping \
+  --cluster <your-cluster-name> \
+  --region ap-south-1 \
+  --arn arn:aws:iam::<account-id>:user/<iam-username> \
+  --group system:masters \
+  --profile sarowar-ostad
+```
+
+For an IAM role (e.g. an EC2 instance role):
+```bash
+eksctl create iamidentitymapping \
+  --cluster <your-cluster-name> \
+  --region ap-south-1 \
+  --arn arn:aws:iam::<account-id>:role/<role-name> \
+  --group system:masters \
+  --profile sarowar-ostad
+```
+
+---
+
 ## Step 1 — Install eksctl
 
 ```bash

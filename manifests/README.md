@@ -21,11 +21,15 @@ manifests/
 │   └── service-loadbalancer.yaml # AWS NLB (EKS only)
 ├── 05-namespace/
 │   └── namespace.yaml          # dev + staging namespace isolation
-└── 06-static-site/
-    ├── configmap.yaml          # HTML page stored as ConfigMap
-    ├── deployment.yaml         # 2-replica nginx:alpine deployment
-    ├── service-nodeport.yaml   # NodePort 30090 (kubeadm + EKS)
-    └── service-loadbalancer.yaml # AWS NLB public endpoint (EKS only)
+├── 06-static-site/
+│   ├── configmap.yaml          # HTML page stored as ConfigMap
+│   ├── deployment.yaml         # 2-replica nginx:alpine deployment
+│   ├── service-nodeport.yaml   # NodePort 30090 (kubeadm + EKS)
+│   └── service-loadbalancer.yaml # AWS NLB public endpoint (EKS only)
+└── 07-env-config-secrets/
+    ├── configmap-app-config.yaml   # Key-value app config ConfigMap
+    ├── secret-credentials.yaml     # Opaque Secret (password + API key)
+    └── deployment-env-vars.yaml    # env: / envFrom: / valueFrom patterns
 ```
 
 **Recommended apply order:** 01 → 02 → 03 → 04 → 05 → 06. Each section builds on the previous.
@@ -516,6 +520,53 @@ kubectl delete -f manifests/06-static-site/
 
 ---
 
+## 07 — Environment Variables, ConfigMaps & Secrets
+
+Demonstrates all five ways to inject configuration into a container at runtime.
+
+| File | What it teaches |
+|------|----------------|
+| `configmap-app-config.yaml` | Key-value ConfigMap for app settings (non-sensitive) |
+| `secret-credentials.yaml` | Opaque Secret for passwords and API keys (base64-encoded) |
+| `deployment-env-vars.yaml` | All 5 injection patterns: hardcoded, `configMapKeyRef`, `secretKeyRef`, `envFrom` ConfigMap, `envFrom` Secret |
+
+### Apply
+
+```bash
+# Apply ConfigMap and Secret first, then the Deployment
+kubectl apply -f manifests/07-env-config-secrets/configmap-app-config.yaml
+kubectl apply -f manifests/07-env-config-secrets/secret-credentials.yaml
+kubectl apply -f manifests/07-env-config-secrets/deployment-env-vars.yaml
+```
+
+### Verify
+
+```bash
+# Get the pod name
+kubectl get pods -l app=env-demo
+
+# Shell into the pod and inspect env vars
+kubectl exec -it <pod-name> -- sh
+  echo $APP_ENV        # from configMapKeyRef
+  echo $DB_PASSWORD    # from secretKeyRef (decoded automatically)
+  echo $LOG_LEVEL      # from envFrom ConfigMap
+  echo $API_KEY        # from envFrom Secret
+  env | sort           # see all env vars
+  exit
+
+# Decode a Secret value directly
+kubectl get secret app-credentials \
+  -o jsonpath='{.data.DB_PASSWORD}' | base64 -d
+```
+
+### Cleanup
+
+```bash
+kubectl delete -f manifests/07-env-config-secrets/
+```
+
+---
+
 ## Full Sequence — Apply Everything
 
 To bring up all resources in order:
@@ -531,6 +582,7 @@ kubectl apply -f manifests/04-service/service-nodeport.yaml
 kubectl apply -f manifests/04-service/service-loadbalancer.yaml
 kubectl apply -f manifests/05-namespace/namespace.yaml
 kubectl apply -f manifests/06-static-site/
+kubectl apply -f manifests/07-env-config-secrets/
 ```
 
 ---
@@ -538,6 +590,7 @@ kubectl apply -f manifests/06-static-site/
 ## Full Sequence — Tear Everything Down
 
 ```bash
+kubectl delete -f manifests/07-env-config-secrets/
 kubectl delete -f manifests/06-static-site/
 kubectl delete -f manifests/05-namespace/namespace.yaml
 kubectl delete -f manifests/04-service/

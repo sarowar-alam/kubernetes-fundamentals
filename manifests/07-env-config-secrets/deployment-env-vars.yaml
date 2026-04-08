@@ -1,0 +1,140 @@
+# =============================================================================
+# deployment-env-vars.yaml
+# Deployment demonstrating all environment variable injection patterns
+#
+# CONCEPT:
+#   Kubernetes supports four ways to inject env vars into a container:
+#
+#   Pattern 1 — Hardcoded (env: value:)
+#     Value lives directly in the YAML. Simple but defeats the
+#     purpose of separating config from code.
+#
+#   Pattern 2 — ConfigMap key reference (env: valueFrom: configMapKeyRef:)
+#     Pull ONE key from a ConfigMap into ONE named env var.
+#     Useful when you want to rename the key or only expose a subset.
+#
+#   Pattern 3 — Secret key reference (env: valueFrom: secretKeyRef:)
+#     Same as above but the source is a Secret.
+#     Use this for passwords, tokens, and API keys.
+#
+#   Pattern 4 — Bulk inject a ConfigMap (envFrom: configMapRef:)
+#     Every key in the ConfigMap becomes an env var with the same name.
+#     Convenient when the ConfigMap is designed for bulk injection.
+#
+#   Pattern 5 — Bulk inject a Secret (envFrom: secretRef:)
+#     Every key in the Secret becomes an env var with the same name.
+#
+# PREREQUISITES:
+#   Apply ConfigMap and Secret first, then this Deployment:
+#     kubectl apply -f configmap-app-config.yaml
+#     kubectl apply -f secret-credentials.yaml
+#     kubectl apply -f deployment-env-vars.yaml
+#
+# REAL-WORLD USE:
+#   - Pattern 2/3: fine-grained control, explicit documentation in YAML
+#   - Pattern 4/5: lean YAML when the ConfigMap/Secret keys already match
+#                  what the app expects
+#
+# Lab Steps:
+#   1. Apply all:       kubectl apply -f .
+#   2. Get pod name:    kubectl get pods -l app=env-demo
+#   3. Exec into pod:   kubectl exec -it <pod-name> -- sh
+#   4. Inside pod:
+#        echo $RUNTIME_ENV        # from Pattern 1 (hardcoded)
+#        echo $APP_ENV            # from Pattern 2 (configMapKeyRef)
+#        echo $DB_PASSWORD        # from Pattern 3 (secretKeyRef) — decoded value
+#        echo $LOG_LEVEL          # from Pattern 4 (envFrom configMap)
+#        echo $API_KEY            # from Pattern 5 (envFrom secret)
+#        env | sort               # see all env vars at once
+#   5. Exit pod:        exit
+#   6. Cleanup:         kubectl delete -f .
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: env-demo
+  labels:
+    app: env-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: env-demo
+  template:
+    metadata:
+      labels:
+        app: env-demo
+    spec:
+      containers:
+        - name: env-demo
+          image: nginx:alpine
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+          # ------------------------------------------------------------------
+          # Pattern 1 — Hardcoded value
+          # Value lives directly in the manifest. No external dependency.
+          # Avoid for anything environment-specific or sensitive.
+          # ------------------------------------------------------------------
+          env:
+            - name: RUNTIME_ENV
+              value: "kubernetes"
+
+            # ----------------------------------------------------------------
+            # Pattern 2 — Single key from a ConfigMap
+            # Injects app-config[APP_ENV] as the env var APP_ENV.
+            # ----------------------------------------------------------------
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config   # ConfigMap name
+                  key: APP_ENV       # key inside that ConfigMap
+
+            # You can rename the env var independently of the ConfigMap key:
+            - name: DATABASE_HOST   # env var name inside the container
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_HOST       # different key name in the ConfigMap
+
+            # ----------------------------------------------------------------
+            # Pattern 3 — Single key from a Secret
+            # The value is stored base64-encoded in the Secret but arrives
+            # decoded in the container's environment variable.
+            # ----------------------------------------------------------------
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-credentials   # Secret name
+                  key: DB_PASSWORD        # key inside that Secret
+
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-credentials
+                  key: API_KEY
+
+          # ------------------------------------------------------------------
+          # Pattern 4 — Bulk inject all keys from a ConfigMap
+          # Every key in app-config (APP_ENV, APP_PORT, LOG_LEVEL, etc.)
+          # becomes an environment variable with the same name.
+          # Note: keys from Pattern 2 above will take precedence over
+          #       same-named keys from envFrom (env: entries win).
+          # ------------------------------------------------------------------
+          envFrom:
+            - configMapRef:
+                name: app-config
+
+            # ----------------------------------------------------------------
+            # Pattern 5 — Bulk inject all keys from a Secret
+            # Every key in app-credentials becomes an env var.
+            # ----------------------------------------------------------------
+            - secretRef:
+                name: app-credentials

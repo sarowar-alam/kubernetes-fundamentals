@@ -1,0 +1,52 @@
+# =============================================================================
+# configmap-app-config.yaml
+# ConfigMap storing application configuration as key-value pairs
+#
+# CONCEPT:
+#   A ConfigMap decouples configuration from container images.
+#   Instead of hardcoding values inside the Docker image or YAML,
+#   you store them in a ConfigMap and inject them at runtime.
+#
+# TWO WAYS TO CONSUME A CONFIGMAP:
+#   1. Environment variables  → each key becomes an env var in the container
+#   2. Volume mount           → each key becomes a file on the container filesystem
+#                              (used in 06-static-site for the HTML file)
+#
+#   This ConfigMap is designed for environment variable injection.
+#   See deployment-env-vars.yaml for how to consume it.
+#
+# REAL-WORLD USE:
+#   - App reads DB_HOST from env var at startup
+#   - You change DB_HOST in the ConfigMap (no image rebuild needed)
+#   - Restart the pods → they pick up the new value
+#
+# Lab Steps:
+#   1. Apply:            kubectl apply -f configmap-app-config.yaml
+#   2. Inspect:          kubectl get configmap app-config
+#   3. View data:        kubectl describe configmap app-config
+#   4. Get single key:   kubectl get configmap app-config -o jsonpath='{.data.APP_ENV}'
+#   5. Edit in place:    kubectl edit configmap app-config
+#   6. Cleanup:          kubectl delete -f configmap-app-config.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    app: env-demo
+data:
+  # Application runtime settings
+  APP_ENV: "production"
+  APP_PORT: "8080"
+  LOG_LEVEL: "info"
+
+  # Database connection settings (non-sensitive — host and name only)
+  # Passwords go in a Secret, never here
+  DB_HOST: "postgres-svc.default.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "appdb"
+
+  # Feature flags
+  ENABLE_CACHE: "true"
+  CACHE_TTL_SECONDS: "300"

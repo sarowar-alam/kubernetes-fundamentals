@@ -43,7 +43,7 @@ NAME_PREFIX="${NAME_PREFIX:-node}"                    # Tags: node-public-1, nod
 
 # ── Instance counts ───────────────────────────────────────────────────────────
 PUBLIC_COUNT="${PUBLIC_COUNT:-2}"    # Instances in the public subnet  (receive public IPs)
-PRIVATE_COUNT="${PRIVATE_COUNT:-2}"  # Instances in the private subnet (private IPs only)
+PRIVATE_COUNT="${PRIVATE_COUNT:-0}"  # Instances in the private subnet (private IPs only)
 
 # ── Output ────────────────────────────────────────────────────────────────────
 STATE_FILE="${STATE_FILE:-./cluster-state.env}"   # Written after provisioning completes

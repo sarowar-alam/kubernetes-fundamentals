@@ -13,11 +13,13 @@ manifests/INSTRUCTOR-PLAYBOOK.md
 
 # -----------------------------------------------------------------------------
 # RUNTIME / GENERATED FILES
-# Created by provision-cluster.sh at class time; contain live AWS resource IDs
-# and public IP addresses — must never be committed.
+# Created at class time; contain live AWS resource IDs and IP addresses.
+# Must never be committed.
 # -----------------------------------------------------------------------------
 scripts/cluster-state.env
 scripts/cluster-state.env.destroyed
+labs/lab-01-kubeadm/k8s-cluster-state.env
+labs/lab-01-kubeadm/k8s-cluster-state.env.destroyed
 
 # -----------------------------------------------------------------------------
 # SECRETS & CREDENTIALS — NEVER COMMIT

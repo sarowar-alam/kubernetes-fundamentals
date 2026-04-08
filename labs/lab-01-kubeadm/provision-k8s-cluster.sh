@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # =============================================================================
 # provision-k8s-cluster.sh
 # Fully-automated provisioning of a kubeadm Kubernetes cluster on AWS EC2.
@@ -436,6 +436,15 @@ launch_instance() {
     && public_flag="--associate-public-ip-address" \
     || public_flag="--no-associate-public-ip-address"
 
+  # On Windows/Git Bash the native aws.exe binary cannot resolve MSYS2/POSIX
+  # paths like /tmp/...  It needs a Windows-style path (C:\Users\...\AppData\...).
+  # cygpath -w converts:  /tmp/foo.sh  ->  C:\Users\...\AppData\Local\Temp\foo.sh
+  # On Linux/macOS cygpath does not exist so we keep the original path.
+  local ud_path="${userdata_file}"
+  if command -v cygpath >/dev/null 2>&1; then
+    ud_path=$(cygpath -w "${userdata_file}")
+  fi
+
   aws ec2 run-instances \
     --profile              "${AWS_PROFILE}" \
     --region               "${AWS_REGION}" \
@@ -446,7 +455,7 @@ launch_instance() {
     --security-group-ids   "${SECURITY_GROUP_ID}" \
     --iam-instance-profile "Name=${INSTANCE_PROFILE_NAME}" \
     --block-device-mappings "${bdm_json}" \
-    --user-data            "file://${userdata_file}" \
+    --user-data            "file://${ud_path}" \
     ${public_flag} \
     --count 1 \
     --tag-specifications \

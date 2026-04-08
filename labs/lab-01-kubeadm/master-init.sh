@@ -211,13 +211,17 @@ else
 fi
 
 # ── 9. Configure kubectl ──────────────────────────────────────────────────────
-info "[9/11] Configuring kubectl for user: ubuntu..."
+info "[9/11] Configuring kubectl for users: ubuntu + root..."
+# ubuntu user (standard interactive sessions)
 mkdir -p "${UBUNTU_HOME}/.kube"
 cp -f /etc/kubernetes/admin.conf "${UBUNTU_HOME}/.kube/config"
 chown -R ubuntu:ubuntu "${UBUNTU_HOME}/.kube"
-# Also make kubectl work in this root session
+# root user (SSM sessions start as root by default)
+mkdir -p /root/.kube
+cp -f /etc/kubernetes/admin.conf /root/.kube/config
+# Also export for this running script session
 export KUBECONFIG=/etc/kubernetes/admin.conf
-ok "kubectl configured (~/.kube/config ready for ubuntu user)."
+ok "kubectl configured (~/.kube/config ready for ubuntu + root)."
 
 # ── 10. Calico CNI ────────────────────────────────────────────────────────────
 info "[10/11] Checking Calico CNI..."

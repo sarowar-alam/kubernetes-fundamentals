@@ -68,10 +68,10 @@ AWS_REGION="${AWS_REGION:-ap-south-1}"
 AMI_ID="${AMI_ID:-ami-05d2d839d4f73aafb}"   # UPDATE: replace with Ubuntu 24.04 AMI for ap-south-1
 
 # -- Network -----------------------------------------------------------------
-VPC_ID="${VPC_ID:-vpc-06f7dead5c49ece64}"
-PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-subnet-0880772cfbeb8bb6f}"    # master node
-PRIVATE_SUBNET_ID="${PRIVATE_SUBNET_ID:-subnet-054147291dc0bf764}"  # worker nodes
-SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-sg-097d6afb08616ba09}"      # shared for all nodes
+VPC_ID="${VPC_ID:-vpc-0d1a6c7c0367c1582}"
+PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-subnet-06b1133dd0eed9a8b}"    # master node
+PRIVATE_SUBNET_ID="${PRIVATE_SUBNET_ID:-subnet-0988bbe778e59601f}"  # worker nodes
+SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-sg-08b7007bf76558dd1}"      # shared for all nodes
 
 # -- Instance ----------------------------------------------------------------
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"           # min 2 vCPU / 4 GB for K8s

@@ -819,15 +819,21 @@ teardown() {
     --instance-ids "${term_ids[@]}"
   ok "All instances terminated"
 
-  # Delete SSM parameters (ignore errors if params were never created)
+  # Delete SSM parameters
+  # Capture stderr so we can distinguish ParameterNotFound (safe to ignore)
+  # from any real error (AccessDenied, network, etc.) which should be shown.
   step "Deleting SSM parameters..."
   for p in "${SSM_MASTER_IP}" "${SSM_JOIN_TOKEN}" "${SSM_JOIN_HASH}"; do
-    if aws ssm delete-parameter \
-      --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
-      --name "${p}" 2>/dev/null; then
+    local ssm_err=""
+    if ssm_err=$(aws ssm delete-parameter \
+        --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
+        --name    "${p}" 2>&1); then
       ok "Deleted : ${p}"
+    elif echo "${ssm_err}" | grep -q "ParameterNotFound"; then
+      warn "Not found (already gone): ${p}"
     else
-      warn "Not found (already gone or never created): ${p}"
+      echo -e "${RED}[ERROR]${RESET} Failed to delete ${p}:"
+      echo    "        ${ssm_err}"
     fi
   done
 

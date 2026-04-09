@@ -528,17 +528,28 @@ wait_join_params() {
 
   while true; do
     # ── Check SSM FIRST -- so a slow send-command never delays detection ──────
-    local val="" ssm_rc=0 ssm_err=""
-    val=$(aws ssm get-parameter \
-      --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
-      --name    "${SSM_MASTER_IP}" \
-      --query   "Parameter.Value" --output text 2>/tmp/_ssm_chk_$$) \
+    # Use --output json + manual parse to avoid --output text quirks on Windows
+    # (CRLF, 'None' return value, JMESPath issues with AWS CLI v2 on Windows).
+    local raw_json="" ssm_rc=0 ssm_err=""
+    raw_json=$(aws ssm get-parameter \
+      --profile    "${AWS_PROFILE}" \
+      --region     "${AWS_REGION}" \
+      --name       "${SSM_MASTER_IP}" \
+      --no-cli-pager \
+      --output     json 2>/tmp/_ssm_chk_$$) \
       || { ssm_rc=$?; ssm_err=$(cat /tmp/_ssm_chk_$$ 2>/dev/null); }
     rm -f /tmp/_ssm_chk_$$
 
-    if [[ ${ssm_rc} -eq 0 && -n "${val}" && "${val}" != "None" ]]; then
-      DETECTED_MASTER_IP="${val}"
-      ok "Master join params available in SSM (master priv IP: ${val})"; return 0
+    if [[ ${ssm_rc} -eq 0 && -n "${raw_json}" ]]; then
+      # Extract: "Value": "10.0.0.80"  -- strip CR and surrounding quotes
+      local val
+      val=$(echo "${raw_json}" | grep '"Value"' | head -1 \
+            | sed 's/.*"Value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' \
+            | tr -d '\r')
+      if [[ -n "${val}" ]]; then
+        DETECTED_MASTER_IP="${val}"
+        ok "Master join params available in SSM (master priv IP: ${val})"; return 0
+      fi
     elif [[ ${ssm_rc} -ne 0 ]] && ! echo "${ssm_err}" | grep -q "ParameterNotFound"; then
       echo -e "   ${YELLOW}[SSM]${RESET} get-parameter error (rc=${ssm_rc}): ${ssm_err}"
     fi
@@ -560,10 +571,11 @@ wait_join_params() {
       --output        text 2>/dev/null) || true
 
     if [[ -n "${cmd_id}" ]]; then
-      # Poll up to 15s for result (master may be CPU-busy during kubeadm init)
+      # Poll up to 30s for result (kubeadm rewrites networking so SSM agent
+      # can take longer than usual to execute commands after init completes)
       local ci_status="" ci_attempts=0
       while [[ "${ci_status}" != "Success" && "${ci_status}" != "Failed" \
-               && ${ci_attempts} -lt 15 ]]; do
+               && ${ci_attempts} -lt 30 ]]; do
         sleep 1; ci_attempts=$((ci_attempts + 1))
         ci_status=$(aws ssm get-command-invocation \
           --profile     "${AWS_PROFILE}" \
@@ -635,13 +647,20 @@ main() {
   # master IP from last session) before the new master has written fresh values.
   step "Purging stale SSM join parameters..."
   for param in "${SSM_MASTER_IP}" "${SSM_JOIN_TOKEN}" "${SSM_JOIN_HASH}"; do
-    if aws ssm delete-parameter \
+    local del_err="" del_rc=0
+    del_err=$(aws ssm delete-parameter \
         --profile "${AWS_PROFILE}" \
         --region  "${AWS_REGION}" \
-        --name    "${param}" 2>/dev/null; then
+        --name    "${param}" 2>&1 >/dev/null) || del_rc=$?
+    if [[ ${del_rc} -eq 0 ]]; then
       ok "Deleted stale param : ${param}"
-    else
+    elif echo "${del_err}" | grep -q "ParameterNotFound"; then
       ok "No stale param found: ${param}  (clean start)"
+    else
+      echo -e "   ${RED}[ERROR]${RESET} Cannot purge ${param}: ${del_err}"
+      echo -e "   ${RED}[ERROR]${RESET} Stale params may cause workers to join the wrong cluster."
+      echo -e "   ${RED}[ERROR]${RESET} If your AWS SSO token is expired, re-run: aws sso login --profile ${AWS_PROFILE}"
+      exit 1
     fi
   done
 

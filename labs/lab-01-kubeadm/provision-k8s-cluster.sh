@@ -528,28 +528,25 @@ wait_join_params() {
 
   while true; do
     # ── Check SSM FIRST -- so a slow send-command never delays detection ──────
-    # Use --output json + manual parse to avoid --output text quirks on Windows
-    # (CRLF, 'None' return value, JMESPath issues with AWS CLI v2 on Windows).
-    local raw_json="" ssm_rc=0 ssm_err=""
-    raw_json=$(aws ssm get-parameter \
+    # Windows aws.exe writes CRLF to stdout. Pipe through tr -d '\r' before
+    # any string comparison -- without this, val ends up as "10.0.0.235\r"
+    # which is non-empty but never equals a plain IP, so detection never fires.
+    local val="" ssm_rc=0 ssm_err=""
+    val=$(aws ssm get-parameter \
       --profile    "${AWS_PROFILE}" \
       --region     "${AWS_REGION}" \
       --name       "${SSM_MASTER_IP}" \
       --no-cli-pager \
-      --output     json 2>/tmp/_ssm_chk_$$) \
+      --query      "Parameter.Value" \
+      --output     text 2>/tmp/_ssm_chk_$$) \
       || { ssm_rc=$?; ssm_err=$(cat /tmp/_ssm_chk_$$ 2>/dev/null); }
     rm -f /tmp/_ssm_chk_$$
+    # Strip carriage returns injected by Windows aws.exe
+    val=$(printf '%s' "${val}" | tr -d '\r')
 
-    if [[ ${ssm_rc} -eq 0 && -n "${raw_json}" ]]; then
-      # Extract: "Value": "10.0.0.80"  -- strip CR and surrounding quotes
-      local val
-      val=$(echo "${raw_json}" | grep '"Value"' | head -1 \
-            | sed 's/.*"Value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' \
-            | tr -d '\r')
-      if [[ -n "${val}" ]]; then
-        DETECTED_MASTER_IP="${val}"
-        ok "Master join params available in SSM (master priv IP: ${val})"; return 0
-      fi
+    if [[ ${ssm_rc} -eq 0 && -n "${val}" && "${val}" != "None" ]]; then
+      DETECTED_MASTER_IP="${val}"
+      ok "Master join params available in SSM (master priv IP: ${val})"; return 0
     elif [[ ${ssm_rc} -ne 0 ]] && ! echo "${ssm_err}" | grep -q "ParameterNotFound"; then
       echo -e "   ${YELLOW}[SSM]${RESET} get-parameter error (rc=${ssm_rc}): ${ssm_err}"
     fi

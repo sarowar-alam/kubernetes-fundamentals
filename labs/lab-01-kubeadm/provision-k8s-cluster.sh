@@ -195,6 +195,8 @@ SCRIPTS_REL="${SCRIPTS_REL}"
 SSM_MASTER_IP="${SSM_MASTER_IP}"
 SSM_JOIN_TOKEN="${SSM_JOIN_TOKEN}"
 SSM_JOIN_HASH="${SSM_JOIN_HASH}"
+NODE_NAME="${CLUSTER_NAME}-master"
+export NODE_NAME
 
 # [1/6] Wait for outbound internet -----------------------------------------
 echo "[1/6] Waiting for internet access..."
@@ -302,6 +304,7 @@ MASTER_EOF
 # =============================================================================
 write_worker_userdata() {
   local out_file="$1"
+  local node_name="${2:-}"
   cat > "${out_file}" <<WORKER_EOF
 #!/usr/bin/env bash
 # ---------------------------------------------------------------
@@ -325,6 +328,8 @@ SCRIPTS_REL="${SCRIPTS_REL}"
 SSM_MASTER_IP="${SSM_MASTER_IP}"
 SSM_JOIN_TOKEN="${SSM_JOIN_TOKEN}"
 SSM_JOIN_HASH="${SSM_JOIN_HASH}"
+NODE_NAME="${node_name}"
+export NODE_NAME
 
 # [1/4] Wait for internet (needs NAT Gateway or VPC endpoints) --------------
 echo "[1/4] Waiting for outbound internet access..."
@@ -415,6 +420,7 @@ chmod +x "\${REPO_DIR}/\${SCRIPTS_REL}/worker-join.sh"
 MASTER_IP="\${MASTER_IP}" \
 JOIN_TOKEN="\${JOIN_TOKEN}" \
 JOIN_HASH="\${JOIN_HASH}" \
+NODE_NAME="\${NODE_NAME}" \
 "\${REPO_DIR}/\${SCRIPTS_REL}/worker-join.sh"
 
 echo "======================================================"
@@ -521,8 +527,22 @@ wait_join_params() {
   echo ""
 
   while true; do
+    # ── Check SSM FIRST -- so a slow send-command never delays detection ──────
+    local val=""
+    val=$(aws ssm get-parameter \
+      --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
+      --name    "${SSM_MASTER_IP}" \
+      --query   "Parameter.Value" --output text 2>/dev/null) || val=""
+
+    if [[ -n "${val}" && "${val}" != "None" ]]; then
+      DETECTED_MASTER_IP="${val}"
+      ok "Master join params available in SSM (master priv IP: ${val})"; return 0
+    fi
+
     elapsed=$((elapsed + interval))
-    sleep "${interval}"
+    if [[ ${elapsed} -ge ${max} ]]; then
+      warn "Timed out (${max}s) monitoring master. Check logs via SSM."; return 1
+    fi
 
     # ── Stream last 30 lines of bootstrap log via SSM Run Command ───────────
     local cmd_id=""
@@ -536,10 +556,10 @@ wait_join_params() {
       --output        text 2>/dev/null) || true
 
     if [[ -n "${cmd_id}" ]]; then
-      # Poll up to 10s for the remote command result
+      # Poll up to 15s for result (master may be CPU-busy during kubeadm init)
       local ci_status="" ci_attempts=0
       while [[ "${ci_status}" != "Success" && "${ci_status}" != "Failed" \
-               && ${ci_attempts} -lt 10 ]]; do
+               && ${ci_attempts} -lt 15 ]]; do
         sleep 1; ci_attempts=$((ci_attempts + 1))
         ci_status=$(aws ssm get-command-invocation \
           --profile     "${AWS_PROFILE}" \
@@ -566,22 +586,8 @@ wait_join_params() {
       fi
     fi
 
-    # ── Check whether master has written join params to SSM ─────────────────
-    local val=""
-    val=$(aws ssm get-parameter \
-      --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
-      --name    "${SSM_MASTER_IP}" \
-      --query   "Parameter.Value" --output text 2>/dev/null) || val=""
-
-    if [[ -n "${val}" && "${val}" != "None" ]]; then
-      DETECTED_MASTER_IP="${val}"
-      ok "Master join params available in SSM (master priv IP: ${val})"; return 0
-    fi
-
-    if [[ ${elapsed} -ge ${max} ]]; then
-      warn "Timed out (${max}s) monitoring master. Check logs via SSM."; return 1
-    fi
     printf "   Next poll in %ds...\n\n" "${interval}"
+    sleep "${interval}"
   done
 }
 # =============================================================================
@@ -634,12 +640,15 @@ main() {
   # Write user data to temp files (cleaned up after launch)
   step "Generating user data scripts..."
   MASTER_UD=$(mktemp /tmp/k8s-master-ud-XXXXX.sh)
-  WORKER_UD=$(mktemp /tmp/k8s-worker-ud-XXXXX.sh)
+  WORKER1_UD=$(mktemp /tmp/k8s-worker1-ud-XXXXX.sh)
+  WORKER2_UD=$(mktemp /tmp/k8s-worker2-ud-XXXXX.sh)
   write_master_userdata "${MASTER_UD}"
-  write_worker_userdata "${WORKER_UD}"
-  chmod 600 "${MASTER_UD}" "${WORKER_UD}"
-  ok "Master user data : ${MASTER_UD}"
-  ok "Worker user data : ${WORKER_UD}"
+  write_worker_userdata "${WORKER1_UD}" "${CLUSTER_NAME}-worker-1"
+  write_worker_userdata "${WORKER2_UD}" "${CLUSTER_NAME}-worker-2"
+  chmod 600 "${MASTER_UD}" "${WORKER1_UD}" "${WORKER2_UD}"
+  ok "Master   user data : ${MASTER_UD}"
+  ok "Worker-1 user data : ${WORKER1_UD}"
+  ok "Worker-2 user data : ${WORKER2_UD}"
 
   # Launch master in public subnet
   step "Launching master node (public subnet: ${PUBLIC_SUBNET_ID})..."
@@ -651,15 +660,15 @@ main() {
   # Workers start immediately and begin polling SSM -- they will wait for master.
   step "Launching worker nodes (private subnet: ${PRIVATE_SUBNET_ID})..."
   WORKER1_INSTANCE_ID=$(launch_instance \
-    "${CLUSTER_NAME}-worker-1" "${PRIVATE_SUBNET_ID}" "false" "worker" "${BDM_JSON}" "${WORKER_UD}")
+    "${CLUSTER_NAME}-worker-1" "${PRIVATE_SUBNET_ID}" "false" "worker" "${BDM_JSON}" "${WORKER1_UD}")
   ok "Worker-1  : ${WORKER1_INSTANCE_ID}"
 
   WORKER2_INSTANCE_ID=$(launch_instance \
-    "${CLUSTER_NAME}-worker-2" "${PRIVATE_SUBNET_ID}" "false" "worker" "${BDM_JSON}" "${WORKER_UD}")
+    "${CLUSTER_NAME}-worker-2" "${PRIVATE_SUBNET_ID}" "false" "worker" "${BDM_JSON}" "${WORKER2_UD}")
   ok "Worker-2  : ${WORKER2_INSTANCE_ID}"
 
   # Clean up temp user data files -- no longer needed after launch
-  rm -f "${MASTER_UD}" "${WORKER_UD}"
+  rm -f "${MASTER_UD}" "${WORKER1_UD}" "${WORKER2_UD}"
 
   # Wait for all instances to reach 'running' OS state
   step "Waiting for all 3 instances to reach 'running' state..."

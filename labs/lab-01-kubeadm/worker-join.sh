@@ -233,9 +233,13 @@ if [[ -f /etc/kubernetes/kubelet.conf ]]; then
 fi
 
 # ── Run kubeadm join ──────────────────────────────────────────────────────────
+# --node-name: use NODE_NAME env var if set (injected by provision-k8s-cluster.sh user data)
+k8s_join_args=()
+[[ -n "${NODE_NAME:-}" ]] && k8s_join_args+=(--node-name="${NODE_NAME}")
 info "Joining the Kubernetes cluster..."
 echo ""
 kubeadm join "${MASTER_IP}:6443" \
+  "${k8s_join_args[@]}" \
   --token                        "${JOIN_TOKEN}" \
   --discovery-token-ca-cert-hash "${JOIN_HASH}"
 

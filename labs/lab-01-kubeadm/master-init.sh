@@ -201,7 +201,11 @@ else
   info "Pod Network CIDR  : 192.168.0.0/16 (required by Calico)"
   info "Running kubeadm init — this takes 2-3 minutes..."
   echo ""
+  # --node-name: use NODE_NAME env var if set (injected by provision-k8s-cluster.sh user data)
+  k8s_init_args=()
+  [[ -n "${NODE_NAME:-}" ]] && k8s_init_args+=(--node-name="${NODE_NAME}")
   kubeadm init \
+    "${k8s_init_args[@]}" \
     --apiserver-advertise-address="${MASTER_PRIVATE_IP}" \
     --pod-network-cidr=192.168.0.0/16 \
     --kubernetes-version="${K8S_FULL_VERSION}" \

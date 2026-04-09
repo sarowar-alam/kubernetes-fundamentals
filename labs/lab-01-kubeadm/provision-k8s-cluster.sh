@@ -528,15 +528,19 @@ wait_join_params() {
 
   while true; do
     # ── Check SSM FIRST -- so a slow send-command never delays detection ──────
-    local val=""
+    local val="" ssm_rc=0 ssm_err=""
     val=$(aws ssm get-parameter \
       --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
       --name    "${SSM_MASTER_IP}" \
-      --query   "Parameter.Value" --output text 2>/dev/null) || val=""
+      --query   "Parameter.Value" --output text 2>/tmp/_ssm_chk_$$) \
+      || { ssm_rc=$?; ssm_err=$(cat /tmp/_ssm_chk_$$ 2>/dev/null); }
+    rm -f /tmp/_ssm_chk_$$
 
-    if [[ -n "${val}" && "${val}" != "None" ]]; then
+    if [[ ${ssm_rc} -eq 0 && -n "${val}" && "${val}" != "None" ]]; then
       DETECTED_MASTER_IP="${val}"
       ok "Master join params available in SSM (master priv IP: ${val})"; return 0
+    elif [[ ${ssm_rc} -ne 0 ]] && ! echo "${ssm_err}" | grep -q "ParameterNotFound"; then
+      echo -e "   ${YELLOW}[SSM]${RESET} get-parameter error (rc=${ssm_rc}): ${ssm_err}"
     fi
 
     elapsed=$((elapsed + interval))
@@ -583,7 +587,11 @@ wait_join_params() {
         echo "${log_out}"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
+      else
+        printf "   [log] SSM Run Command queued but no output yet (normal during kubeadm init)\n\n"
       fi
+    else
+      printf "   [log] send-command unavailable -- master agent busy, will retry\n\n"
     fi
 
     printf "   Next poll in %ds...\n\n" "${interval}"

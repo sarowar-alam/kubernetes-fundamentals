@@ -426,8 +426,9 @@ kubectl diff -f manifest.yaml                      # what would change
 
 ---
 
-## Author
+## 🧑‍💻 Author
 
-**Md. Sarowar Alam**  
-DevOps & Cloud Engineering Student, Batch-09  
-[github.com/sarowar-alam](https://github.com/sarowar-alam)
+*Md. Sarowar Alam*  
+Lead DevOps Engineer, WPP Production  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/sarowar/

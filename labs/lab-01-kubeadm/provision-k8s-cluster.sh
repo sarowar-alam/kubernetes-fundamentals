@@ -506,6 +506,8 @@ wait_ssm_online() {
 # =============================================================================
 #  WAIT FOR MASTER JOIN PARAMS IN SSM
 #  Blocks this script while master-init.sh runs (~15-20 min on t3.medium).
+#  Every poll cycle fetches the last 30 lines of the master bootstrap log via
+#  SSM Run Command and prints them to the local console in real time.
 #  Sets DETECTED_MASTER_IP when params are available.
 # =============================================================================
 wait_join_params() {
@@ -513,32 +515,74 @@ wait_join_params() {
   DETECTED_MASTER_IP=""
 
   step "Monitoring master bootstrap progress (up to 40 min)..."
-  info "Connect to master now to watch live logs:"
+  info "For a live interactive session (optional, separate terminal):"
   info "  aws ssm start-session --profile ${AWS_PROFILE} --region ${AWS_REGION} --target ${MASTER_INSTANCE_ID}"
   info "  sudo tail -f /var/log/k8s-master-bootstrap.log"
   echo ""
 
   while true; do
-    local val
+    elapsed=$((elapsed + interval))
+    sleep "${interval}"
+
+    # ── Stream last 30 lines of bootstrap log via SSM Run Command ───────────
+    local cmd_id=""
+    cmd_id=$(aws ssm send-command \
+      --profile       "${AWS_PROFILE}" \
+      --region        "${AWS_REGION}" \
+      --instance-ids  "${MASTER_INSTANCE_ID}" \
+      --document-name "AWS-RunShellScript" \
+      --parameters    '{"commands":["tail -n 30 /var/log/k8s-master-bootstrap.log 2>/dev/null || echo \"(log not yet available)\""]}' \
+      --query         "Command.CommandId" \
+      --output        text 2>/dev/null) || true
+
+    if [[ -n "${cmd_id}" ]]; then
+      # Poll up to 10s for the remote command result
+      local ci_status="" ci_attempts=0
+      while [[ "${ci_status}" != "Success" && "${ci_status}" != "Failed" \
+               && ${ci_attempts} -lt 10 ]]; do
+        sleep 1; ci_attempts=$((ci_attempts + 1))
+        ci_status=$(aws ssm get-command-invocation \
+          --profile     "${AWS_PROFILE}" \
+          --region      "${AWS_REGION}" \
+          --command-id  "${cmd_id}" \
+          --instance-id "${MASTER_INSTANCE_ID}" \
+          --query       "Status" --output text 2>/dev/null) || ci_status=""
+      done
+
+      local log_out=""
+      log_out=$(aws ssm get-command-invocation \
+        --profile     "${AWS_PROFILE}" \
+        --region      "${AWS_REGION}" \
+        --command-id  "${cmd_id}" \
+        --instance-id "${MASTER_INSTANCE_ID}" \
+        --query       "StandardOutputContent" \
+        --output      text 2>/dev/null) || log_out=""
+
+      if [[ -n "${log_out}" ]]; then
+        echo "━━━  Master bootstrap log — ${elapsed}s elapsed  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "${log_out}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+      fi
+    fi
+
+    # ── Check whether master has written join params to SSM ─────────────────
+    local val=""
     val=$(aws ssm get-parameter \
       --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
       --name    "${SSM_MASTER_IP}" \
-      --query   "Parameter.Value" --output text 2>/dev/null || echo "")
+      --query   "Parameter.Value" --output text 2>/dev/null) || val=""
 
     if [[ -n "${val}" && "${val}" != "None" ]]; then
       DETECTED_MASTER_IP="${val}"
-      echo ""; ok "Master join params available in SSM (master priv IP: ${val})"; return 0
+      ok "Master join params available in SSM (master priv IP: ${val})"; return 0
     fi
 
-    elapsed=$((elapsed + interval))
     if [[ ${elapsed} -ge ${max} ]]; then
-      echo ""; warn "Timed out (${max}s) monitoring master. Check logs via SSM."; return 1
+      warn "Timed out (${max}s) monitoring master. Check logs via SSM."; return 1
     fi
-    printf "\r   Master initialising... %3ds elapsed  (polling every %ds)" \
-      "${elapsed}" "${interval}"
-    sleep "${interval}"
+    printf "   Next poll in %ds...\n\n" "${interval}"
   done
-  echo ""
 }
 # =============================================================================
 #  MAIN -- PROVISION
@@ -571,6 +615,21 @@ main() {
   ROOT_DEVICE=$(get_root_device)
   BDM_JSON=$(build_bdm "${ROOT_DEVICE}")
   ok "Root device: ${ROOT_DEVICE}  ->  gp3 ${ROOT_VOLUME_GIB}GiB  DeleteOnTermination=true"
+
+  # Purge stale SSM join parameters from any previous cluster run.
+  # Without this, workers boot and immediately read old params (e.g. a dead
+  # master IP from last session) before the new master has written fresh values.
+  step "Purging stale SSM join parameters..."
+  for param in "${SSM_MASTER_IP}" "${SSM_JOIN_TOKEN}" "${SSM_JOIN_HASH}"; do
+    if aws ssm delete-parameter \
+        --profile "${AWS_PROFILE}" \
+        --region  "${AWS_REGION}" \
+        --name    "${param}" 2>/dev/null; then
+      ok "Deleted stale param : ${param}"
+    else
+      ok "No stale param found: ${param}  (clean start)"
+    fi
+  done
 
   # Write user data to temp files (cleaned up after launch)
   step "Generating user data scripts..."

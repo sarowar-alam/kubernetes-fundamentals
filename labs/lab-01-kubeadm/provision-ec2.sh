@@ -30,10 +30,10 @@ AWS_REGION="${AWS_REGION:-ap-south-1}"
 
 # ── Required ──────────────────────────────────────────────────────────────────
 AMI_ID="${AMI_ID:-ami-05d2d839d4f73aafb}"              # Ubuntu 22.04 LTS ap-south-1
-VPC_ID="${VPC_ID:-vpc-06f7dead5c49ece64}"
-PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-subnet-0880772cfbeb8bb6f}"   # Subnet that assigns public IPs
+VPC_ID="${VPC_ID:-vpc-057236bf8e20608a1}"
+PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-subnet-0b63bd17c9fc71afe}"   # Subnet that assigns public IPs
 PRIVATE_SUBNET_ID="${PRIVATE_SUBNET_ID:-subnet-054147291dc0bf764}" # Subnet without public-IP assignment
-SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-sg-097d6afb08616ba09}"     # devops-vpc default SG
+SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-sg-035dfc57871758057}"     # devops-vpc default SG
 
 # ── Optional ──────────────────────────────────────────────────────────────────
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"           # e.g. t3.micro, m5.large
@@ -43,7 +43,7 @@ NAME_PREFIX="${NAME_PREFIX:-node}"                    # Tags: node-public-1, nod
 
 # ── Instance counts ───────────────────────────────────────────────────────────
 PUBLIC_COUNT="${PUBLIC_COUNT:-1}"    # Instances in the public subnet  (receive public IPs)
-PRIVATE_COUNT="${PRIVATE_COUNT:-2}"  # Instances in the private subnet (private IPs only)
+PRIVATE_COUNT="${PRIVATE_COUNT:-0}"  # Instances in the private subnet (private IPs only)
 
 # ── Output ────────────────────────────────────────────────────────────────────
 STATE_FILE="${STATE_FILE:-./cluster-state.env}"   # Written after provisioning completes

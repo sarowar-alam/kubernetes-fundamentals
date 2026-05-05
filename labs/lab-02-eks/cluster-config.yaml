@@ -34,7 +34,7 @@ metadata:
 
   # AWS region where the cluster will be created
   # ap-south-1 = Mumbai — closest to Bangladesh, lower latency
-  region: ap-south-1
+  region: eu-west-1
 
   # Kubernetes version for the control plane
   # EKS manages master node upgrades; just bump this number
@@ -177,7 +177,7 @@ managedNodeGroups:
     ssh:
       allow: true
       # Name of an existing EC2 Key Pair in ap-south-1
-      publicKeyName: sarowar-ostad-mumbai
+      publicKeyName: sarowar-ostad-europe
 
     # Labels are key-value metadata attached to every node in this group
     # Used by nodeSelectors to pin specific pods to specific nodes

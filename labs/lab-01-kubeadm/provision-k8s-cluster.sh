@@ -31,11 +31,26 @@
 # Override any variable inline without editing the file:
 #   AMI_ID=ami-0abc123 CLUSTER_NAME=dev bash provision-k8s-cluster.sh
 #
-# IAM Instance Profile requirements (attach to INSTANCE_PROFILE_NAME):
+# IAM requirements
+#
+#  EC2 Instance Profile (attach to INSTANCE_PROFILE_NAME):
 #   AmazonSSMManagedInstanceCore   -- SSM Session Manager shell access
 #   ssm:PutParameter               -- master writes join params
 #   ssm:GetParameter               -- workers read join params
-#   ssm:DeleteParameter            -- teardown cleanup
+#   ssm:DeleteParameter            -- (unused on instances; kept for completeness)
+#
+#  Local IAM principal running this script (the profile = AWS_PROFILE):
+#   ssm:DeleteParameter            -- main() purge of stale params on each run
+#                                     + teardown() cleanup
+#   ssm:GetParameter               -- wait_join_params() polls master-private-ip
+#   ec2:RunInstances               -- launch master + workers
+#   ec2:DescribeInstances          -- fetch IPs
+#   ec2:DescribeImages             -- resolve AMI root device
+#   ec2:TerminateInstances         -- teardown
+#   ec2:DescribeInstanceInformation-- wait_ssm_online
+#   ssm:SendCommand                -- streaming master log (optional, non-fatal)
+#   ssm:GetCommandInvocation       -- streaming master log (optional, non-fatal)
+#   iam:PassRole                   -- attach INSTANCE_PROFILE_NAME to instances
 #
 # Private subnet workers must reach the internet via one of:
 #   Option A -- NAT Gateway attached to the VPC (standard, recommended)
@@ -68,10 +83,10 @@ AWS_REGION="${AWS_REGION:-ap-south-1}"
 AMI_ID="${AMI_ID:-ami-05d2d839d4f73aafb}"   # UPDATE: replace with Ubuntu 24.04 AMI for ap-south-1
 
 # -- Network -----------------------------------------------------------------
-VPC_ID="${VPC_ID:-vpc-0d1a6c7c0367c1582}"
-PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-subnet-06b1133dd0eed9a8b}"    # master node
-PRIVATE_SUBNET_ID="${PRIVATE_SUBNET_ID:-subnet-0988bbe778e59601f}"  # worker nodes
-SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-sg-08b7007bf76558dd1}"      # shared for all nodes
+VPC_ID="${VPC_ID:-vpc-0f745b5a4a27305ad}"
+PUBLIC_SUBNET_ID="${PUBLIC_SUBNET_ID:-subnet-0f7756ee826378262}"    # master node
+PRIVATE_SUBNET_ID="${PRIVATE_SUBNET_ID:-subnet-049e270004ab281b9}"  # worker nodes
+SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-sg-0ae392fe6ac4d946e}"      # shared for all nodes
 
 # -- Instance ----------------------------------------------------------------
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"           # min 2 vCPU / 4 GB for K8s
@@ -129,6 +144,23 @@ validate() {
     --output text --query "Account" >/dev/null 2>&1 \
     || fail "Credentials for '${AWS_PROFILE}' are invalid or expired."
 
+  # Probe ssm:DeleteParameter permission by attempting to delete a non-existent path.
+  # When allowed: AWS returns ParameterNotFound (param just doesn't exist) -- safe.
+  # When denied : AWS returns AccessDenied -- permission is missing.
+  # IMPORTANT: AWS ALSO returns ParameterNotFound (not AccessDenied) when the caller
+  # lacks permission on a parameter that *does* exist -- this is intentional AWS
+  # behaviour to prevent resource enumeration.  Without this probe the delete loop
+  # silently treats every real parameter as "already gone" while they survive intact.
+  local _probe_err=""
+  _probe_err=$(aws ssm delete-parameter \
+    --profile      "${AWS_PROFILE}" \
+    --region       "${AWS_REGION}" \
+    --name         "/_k8s-provision-perm-probe" \
+    --no-cli-pager 2>&1) || true
+  if echo "${_probe_err}" | grep -qE "AccessDenied|UnauthorizedOperation"; then
+    fail "Profile '${AWS_PROFILE}' lacks ssm:DeleteParameter permission.\n       Grant it before provisioning -- without it, stale param cleanup silently\n       fails and workers may join the wrong cluster."
+  fi
+
   for var in AMI_ID VPC_ID PUBLIC_SUBNET_ID PRIVATE_SUBNET_ID \
              SECURITY_GROUP_ID KEY_NAME INSTANCE_PROFILE_NAME; do
     [[ -z "${!var}" ]] && fail "${var} must not be empty."
@@ -136,6 +168,7 @@ validate() {
 
   ok "AWS CLI   : $(aws --version 2>&1 | head -1)"
   ok "Profile   : ${AWS_PROFILE} (authenticated)"
+  ok "ssm:DeleteParameter permission verified for '${AWS_PROFILE}'"
   ok "Variables : all required values present"
 }
 
@@ -644,22 +677,42 @@ main() {
   # master IP from last session) before the new master has written fresh values.
   step "Purging stale SSM join parameters..."
   for param in "${SSM_MASTER_IP}" "${SSM_JOIN_TOKEN}" "${SSM_JOIN_HASH}"; do
-    local del_err="" del_rc=0
-    del_err=$(aws ssm delete-parameter \
-        --profile "${AWS_PROFILE}" \
-        --region  "${AWS_REGION}" \
-        --name    "${param}" 2>&1 >/dev/null) || del_rc=$?
-    if [[ ${del_rc} -eq 0 ]]; then
+    local ssm_err=""
+    if ssm_err=$(aws ssm delete-parameter \
+        --profile      "${AWS_PROFILE}" \
+        --region       "${AWS_REGION}" \
+        --name         "${param}" \
+        --no-cli-pager 2>&1); then
       ok "Deleted stale param : ${param}"
-    elif echo "${del_err}" | grep -q "ParameterNotFound"; then
+    elif echo "${ssm_err}" | grep -q "ParameterNotFound"; then
       ok "No stale param found: ${param}  (clean start)"
     else
-      echo -e "   ${RED}[ERROR]${RESET} Cannot purge ${param}: ${del_err}"
+      echo -e "   ${RED}[ERROR]${RESET} Cannot purge ${param}: ${ssm_err}"
       echo -e "   ${RED}[ERROR]${RESET} Stale params may cause workers to join the wrong cluster."
-      echo -e "   ${RED}[ERROR]${RESET} If your AWS SSO token is expired, re-run: aws sso login --profile ${AWS_PROFILE}"
+      if echo "${ssm_err}" | grep -qE "AccessDenied|UnauthorizedOperation"; then
+        echo -e "   ${RED}[ERROR]${RESET} AccessDenied: ensure the IAM principal for '${AWS_PROFILE}' has ssm:DeleteParameter."
+      elif echo "${ssm_err}" | grep -qE "ExpiredToken|TokenRefreshRequired"; then
+        echo -e "   ${RED}[ERROR]${RESET} Credentials expired. Re-run: aws sso login --profile ${AWS_PROFILE}"
+      fi
       exit 1
     fi
   done
+
+  # Verify purge took effect.  AWS returns ParameterNotFound (not AccessDenied) when
+  # the caller lacks ssm:DeleteParameter, so the loop above silently reports
+  # "clean start" while params survive.  describe-parameters reveals the truth.
+  local _still_present=""
+  _still_present=$(aws ssm describe-parameters \
+    --profile          "${AWS_PROFILE}" \
+    --region           "${AWS_REGION}" \
+    --parameter-filters "Key=Path,Option=Recursive,Values=/${CLUSTER_NAME}/" \
+    --query            "Parameters[*].Name" \
+    --output           text \
+    --no-cli-pager 2>/dev/null | tr -d '\r') || _still_present=""
+  if [[ -n "${_still_present}" && "${_still_present}" != "None" ]]; then
+    fail "Stale SSM parameters still exist after purge:\n       ${_still_present}\n       The IAM principal for '${AWS_PROFILE}' likely lacks ssm:DeleteParameter.\n       AWS masks this as ParameterNotFound to prevent resource enumeration."
+  fi
+  ok "SSM namespace /${CLUSTER_NAME}/ is clean -- safe to provision"
 
   # Write user data to temp files (cleaned up after launch)
   step "Generating user data scripts..."
@@ -859,16 +912,50 @@ teardown() {
   for p in "${SSM_MASTER_IP}" "${SSM_JOIN_TOKEN}" "${SSM_JOIN_HASH}"; do
     local ssm_err=""
     if ssm_err=$(aws ssm delete-parameter \
-        --profile "${AWS_PROFILE}" --region "${AWS_REGION}" \
-        --name    "${p}" 2>&1); then
+        --profile      "${AWS_PROFILE}" \
+        --region       "${AWS_REGION}" \
+        --name         "${p}" \
+        --no-cli-pager 2>&1); then
       ok "Deleted : ${p}"
     elif echo "${ssm_err}" | grep -q "ParameterNotFound"; then
       warn "Not found (already gone): ${p}"
     else
       echo -e "${RED}[ERROR]${RESET} Failed to delete ${p}:"
       echo    "        ${ssm_err}"
+      if echo "${ssm_err}" | grep -qE "AccessDenied|UnauthorizedOperation"; then
+        echo -e "${RED}[ERROR]${RESET} AccessDenied: ensure the IAM principal for '${AWS_PROFILE}' has ssm:DeleteParameter."
+      elif echo "${ssm_err}" | grep -qE "ExpiredToken|TokenRefreshRequired"; then
+        echo -e "${RED}[ERROR]${RESET} Credentials expired. Re-run: aws sso login --profile ${AWS_PROFILE}"
+      fi
     fi
   done
+
+  # Verify deletion actually succeeded.
+  # AWS returns ParameterNotFound (not AccessDenied) when the caller lacks
+  # ssm:DeleteParameter, causing the loop above to silently report "already gone"
+  # while every parameter survives.  describe-parameters reveals the truth.
+  step "Verifying SSM parameters are deleted..."
+  local _still_present=""
+  _still_present=$(aws ssm describe-parameters \
+    --profile          "${AWS_PROFILE}" \
+    --region           "${AWS_REGION}" \
+    --parameter-filters "Key=Path,Option=Recursive,Values=/${CLUSTER_NAME}/" \
+    --query            "Parameters[*].Name" \
+    --output           text \
+    --no-cli-pager 2>/dev/null | tr -d '\r') || _still_present=""
+  if [[ -n "${_still_present}" && "${_still_present}" != "None" ]]; then
+    echo -e "${RED}[ERROR]${RESET} The following SSM parameters still exist after deletion:"
+    echo    "        ${_still_present}"
+    echo -e "${RED}[ERROR]${RESET} The IAM principal for '${AWS_PROFILE}' likely lacks ssm:DeleteParameter."
+    echo -e "${RED}[ERROR]${RESET} AWS masks this as ParameterNotFound to prevent resource enumeration."
+    echo -e "${RED}[ERROR]${RESET} Grant ssm:DeleteParameter and delete manually:"
+    for _p in ${_still_present}; do
+      echo    "        aws ssm delete-parameter --profile ${AWS_PROFILE} --region ${AWS_REGION} --name ${_p}"
+    done
+    echo ""
+  else
+    ok "All SSM parameters confirmed absent"
+  fi
 
   # Archive the state file so teardown cannot be run twice accidentally
   mv "${STATE_FILE}" "${STATE_FILE}.destroyed"
